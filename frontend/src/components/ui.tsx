@@ -1,6 +1,6 @@
 import { Check, CircleAlert, CircleCheck, CircleX, Moon, Sun } from 'lucide-react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { useTheme } from './ThemeProvider'
+import { useTheme } from './theme-context'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { readonly tone?: 'primary' | 'secondary'; readonly size?: 'admin' | 'kiosk' }
 
