@@ -3,12 +3,22 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+.venv/
+*.egg-info/
 
 # Environment and Secrets
 .env
+.env.*
+!.env.example
 .DS_Store
 .gemini/
+Thumbs.db
 
 # IDE
 .vscode/
 .idea/
+
+# Backend local data
+backend/storage/
+*.db
+*.sqlite3
