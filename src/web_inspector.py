@@ -18,8 +18,9 @@ try:
 except ImportError:
     HAS_PICAM2 = False
 
-# VLM 모듈
+# VLM 모듈 및 MQTT 모듈
 from vlm_inspector import inspect_with_vlm, calculate_blur_score
+from mqtt_publisher import get_telemetry_publisher
 
 app = Flask(__name__)
 
@@ -400,13 +401,68 @@ HTML_TEMPLATE = """
 def process_and_inspect(img_bgr):
     global last_inspection_result, last_inspection_bgr
     last_inspection_bgr = img_bgr.copy()
+    insp_id = str(uuid.uuid4())
+    publisher = get_telemetry_publisher()
 
-    # VLM 및 Fail-Safe 검사 수행
+    # 1. 화면 전송용 경량 썸네일 생성 (480x320, Base64 약 15KB)
+    thumb = cv2.resize(img_bgr, (480, 320), interpolation=cv2.INTER_AREA)
+    _, buf = cv2.imencode(".jpg", thumb, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    capture_image_url = "data:image/jpeg;base64," + base64.b64encode(buf).decode("utf-8")
+
+    # 선명도 계측
+    blur_score = calculate_blur_score(img_bgr)
+
+    # 2. [MQTT 텔레메트리 1단계: OCR 단계 시작 & 캡처 사진 전달!]
+    publisher.publish_telemetry(
+        inspection_id=insp_id,
+        stage="OCR",
+        progress_percent=25,
+        message="보드 표면의 고유 시리얼 번호를 인식하고 있습니다...",
+        blur_score=blur_score,
+        stabilization_ms=300,
+        capture_image_url=capture_image_url
+    )
+
+    # 3. VLM 및 Fail-Safe 정밀 검사 수행
     result = inspect_with_vlm(img_bgr)
+    result["inspection_id"] = insp_id
+    result["capture_image_url"] = capture_image_url
 
-    # 화면 표시용 JPEG Base64
-    _, buf = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
-    result["image_base64"] = base64.b64encode(buf).decode("utf-8")
+    # 4. [MQTT 텔레메트리 2단계: LED 점등 상태 전달]
+    led_msg = "온보드 PWR LED 정상 점등 확인" if result.get("pwr_led_status") else "PWR LED 점등 확인 진행"
+    publisher.publish_telemetry(
+        inspection_id=insp_id,
+        stage="LED_CHECK",
+        progress_percent=60,
+        message=led_msg,
+        blur_score=blur_score,
+        stabilization_ms=300
+    )
+
+    # 5. [MQTT 텔레메트리 3단계: AI 외관 검사 상태 전달]
+    verdict = result.get("primary_verdict", "FAIL")
+    publisher.publish_telemetry(
+        inspection_id=insp_id,
+        stage="AI_INFERENCE",
+        progress_percent=85,
+        message=f"AI 모델 외관 분석 완료 ({verdict})",
+        blur_score=blur_score,
+        stabilization_ms=300
+    )
+
+    # 6. [MQTT 텔레메트리 4단계: 최종 완료]
+    publisher.publish_telemetry(
+        inspection_id=insp_id,
+        stage="COMPLETED",
+        progress_percent=100,
+        message=f"검사가 완료되었습니다. 최종 결과: {verdict}",
+        blur_score=blur_score,
+        stabilization_ms=300
+    )
+
+    # 화면 표시용 고화질 JPEG Base64
+    _, full_buf = cv2.imencode(".jpg", img_bgr, [cv2.IMWRITE_JPEG_QUALITY, 85])
+    result["image_base64"] = base64.b64encode(full_buf).decode("utf-8")
 
     last_inspection_result = result
     return result
