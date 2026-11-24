@@ -6,6 +6,7 @@ services:
   db:
     image: postgres:16
     container_name: rentaly-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -22,6 +23,7 @@ services:
   mqtt:
     image: eclipse-mosquitto:2
     container_name: rentaly-mqtt
+    restart: unless-stopped
     ports:
       - "1883:1883"
       - "9001:9001"
@@ -32,6 +34,7 @@ services:
   api:
     build: ./backend
     container_name: rentaly-api
+    restart: unless-stopped
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: .env
     environment:
