@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # =============================================================================
@@ -12,8 +12,8 @@ class Defect(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     class_name: str = Field(alias="class")
-    confidence: float = Field(ge=0, le=1)
-    bbox: list[float] = Field(min_length=4, max_length=4)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    bbox: list[float] | None = Field(default=None, min_length=4, max_length=4)
 
 
 class Metrics(BaseModel):
@@ -34,6 +34,31 @@ class InspectionMetadata(BaseModel):
     pwr_led_status: bool
     detected_defects: list[Defect] = []
     metrics: Metrics = Metrics()
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_edge_format(cls, data):
+        # 검사대(web_inspector.py) 전송 형식을 API_CONTRACT 형식으로 맞춤
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+
+        if "blur_score" in data:
+            metrics = dict(data.get("metrics") or {})
+            metrics.setdefault("blur_score", data["blur_score"])
+            data["metrics"] = metrics
+
+        extra = data.get("metadata")
+        if "detected_defects" not in data and isinstance(extra, dict):
+            defect = extra.get("defect_type")
+            if defect and defect != "NONE":
+                item = {"class": defect}
+                conf = extra.get("confidence")
+                if isinstance(conf, (int, float)) and 0 <= conf <= 1:
+                    item["confidence"] = conf
+                data["detected_defects"] = [item]
+
+        return data
 
 
 # =============================================================================
