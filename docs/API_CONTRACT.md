@@ -38,7 +38,8 @@ inspection/{device_id}/telemetry
   "progress_percent": 75,
   "blur_score": 182.4,
   "stabilization_ms": 320,
-  "message": "AI 외관 결함 분석을 진행 중입니다..."
+  "message": "AI 외관 결함 분석을 진행 중입니다...",
+  "capture_image_url": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."
 }
 ```
 
@@ -52,6 +53,7 @@ inspection/{device_id}/telemetry
 | `blur_score` | float | 카메라 영상의 선명도 점수 (라플라시안 분산) | `150.2` (높을수록 선명함) |
 | `stabilization_ms`| int | 모션 흔들림 안정화까지 걸린 시간 (ms) | `320` |
 | `message` | string | 사용자 화면(UI)에 띄울 한글 안내 메시지 | `"장비가 거치되었습니다."` |
+| `capture_image_url` | string (선택) | 촬영 직후 키오스크에 표시할 JPEG Base64 Data URL. 이후 단계에서 생략해도 키오스크는 해당 검사 중 이미지를 유지합니다. | `"data:image/jpeg;base64,..."` |
 
 #### `stage` (검사 단계) 구분:
 1. `MOUNTED`: 보드가 거치대 스위치에 정상 안착됨 감지

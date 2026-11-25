@@ -25,6 +25,7 @@ import time
 import json
 import uuid
 import argparse
+import base64
 import io
 
 # ---------------------------------------------------------------------------
@@ -87,7 +88,8 @@ class MockEdgeStation:
             print(f"[MQTT] 브로커 연결 실패 (MQTT 발행은 건너뜁니다): {e}")
             self.mqtt_client = None
 
-    def publish_telemetry(self, inspection_id, stage, progress, message, blur_score=185.0):
+    def publish_telemetry(self, inspection_id, stage, progress, message, blur_score=185.0,
+                          primary_verdict=None, reposition_count=None, capture_image_url=None):
         """프론트엔드가 실시간으로 확인할 수 있도록 MQTT 토픽을 발행합니다."""
         payload = {
             "inspection_id": inspection_id,
@@ -98,6 +100,12 @@ class MockEdgeStation:
             "stabilization_ms": 280,
             "message": message
         }
+        if primary_verdict is not None:
+            payload["primary_verdict"] = primary_verdict
+        if reposition_count is not None:
+            payload["reposition_count"] = reposition_count
+        if capture_image_url is not None:
+            payload["capture_image_url"] = capture_image_url
         topic = f"inspection/{self.device_id}/telemetry"
         print(f"  📡 [MQTT Telemetry] [{progress:3d}%] [{stage}] {message}")
         
@@ -114,6 +122,8 @@ class MockEdgeStation:
           - 'pass': 모든 외관 및 LED 점등 통과 (정상 반납)
           - 'fail': 외관 결함(핀 휨) 또는 LED 미점등 발견 (관리자 검토 대기열)
           - 'reposition': 영상 흐림으로 인한 재배치 안내
+          - 'error': 검사대 장애 안내
+          - 'manual_return': 재거치 3회 초과 후 수동 반납 안내
         """
         inspection_id = str(uuid.uuid4())
         print("\n" + "=" * 60)
@@ -124,6 +134,16 @@ class MockEdgeStation:
         self.publish_telemetry(inspection_id, "MOUNTED", 10, "장비가 거치되었습니다. 검사를 시작합니다.")
         time.sleep(0.8)
 
+        if scenario == "error":
+            self.publish_telemetry(inspection_id, "ERROR", 10, "카메라 연결 오류가 발생했습니다. 관리자에게 직접 반납해 주세요.")
+            return
+
+        if scenario == "manual_return":
+            self.publish_telemetry(inspection_id, "REPOSITION", 40, "보드를 다시 놓아주세요.", reposition_count=3)
+            time.sleep(0.8)
+            self.publish_telemetry(inspection_id, "MANUAL_RETURN", 40, "재거치 횟수를 초과했습니다. 관리자에게 직접 반납해 주세요.")
+            return
+
         # 2단계: 카메라 안정화
         self.publish_telemetry(inspection_id, "STABILIZING", 25, "카메라 초점 및 모션을 안정화하고 있습니다...")
         time.sleep(0.8)
@@ -132,7 +152,7 @@ class MockEdgeStation:
         if scenario == "reposition":
             self.publish_telemetry(inspection_id, "BLUR_CHECK", 40, "손 떨림 또는 위치 불안정이 감지되었습니다.", blur_score=45.2)
             time.sleep(0.8)
-            self.publish_telemetry(inspection_id, "REPOSITION", 40, "보드가 흔들렸습니다. 보드를 바르게 다시 놓아주세요.")
+            self.publish_telemetry(inspection_id, "REPOSITION", 40, "보드가 흔들렸습니다. 보드를 바르게 다시 놓아주세요.", reposition_count=1)
             print("\n⚠️ [재배치 안내] 사용자가 보드를 다시 놓아야 하므로 세션을 일시 중단합니다.")
             return
 
@@ -140,7 +160,16 @@ class MockEdgeStation:
         time.sleep(0.8)
 
         # 4단계: 시리얼 번호 광학 인식 (OCR)
-        self.publish_telemetry(inspection_id, "OCR", 60, "보드 표면의 고유 시리얼 번호를 인식하고 있습니다...")
+        capture_image_url = "data:image/jpeg;base64," + base64.b64encode(
+            generate_dummy_image(f"ID: {inspection_id}\nOCR TEST IMAGE")
+        ).decode("ascii")
+        self.publish_telemetry(
+            inspection_id,
+            "OCR",
+            60,
+            "보드 표면의 고유 시리얼 번호를 인식하고 있습니다...",
+            capture_image_url=capture_image_url,
+        )
         time.sleep(0.8)
 
         # 5단계: 온보드 PWR LED 점등 확인
@@ -171,7 +200,7 @@ class MockEdgeStation:
             ]
 
         # 7단계: 검사 완료 알림
-        self.publish_telemetry(inspection_id, "COMPLETED", 100, f"검사가 완료되었습니다. 최종 결과: {verdict}")
+        self.publish_telemetry(inspection_id, "COMPLETED", 100, f"검사가 완료되었습니다. 최종 결과: {verdict}", primary_verdict=verdict)
 
         # 8단계: 백엔드로 최종 결과 전송 (REST API)
         self._send_to_backend(inspection_id, verdict, pwr_led_ok, defects)
@@ -236,8 +265,8 @@ class MockEdgeStation:
 
 def main():
     parser = argparse.ArgumentParser(description="가짜 엣지 검사대 시뮬레이터 (Mock Edge)")
-    parser.add_argument("--scenario", choices=["pass", "fail", "fail_led", "reposition"], default=None,
-                        help="실행할 검사 시나리오 (pass, fail, fail_led, reposition)")
+    parser.add_argument("--scenario", choices=["pass", "fail", "fail_led", "reposition", "error", "manual_return"], default=None,
+                        help="실행할 검사 시나리오 (pass, fail, fail_led, reposition, error, manual_return)")
     parser.add_argument("--backend", default="http://localhost:8000",
                         help="백엔드 FastAPI 서버 주소 (기본: http://localhost:8000)")
     parser.add_argument("--mqtt-host", default="localhost",
@@ -261,14 +290,16 @@ def main():
         print("  2. 외관 결함 발견 (FAIL - 핀 휨)")
         print("  3. 전원 불량 발견 (FAIL - PWR LED 꺼짐)")
         print("  4. 영상 흐림 / 재배치 안내 (REPOSITION)")
+        print("  5. 검사대 장애 (ERROR)")
+        print("  6. 재거치 초과 (MANUAL_RETURN)")
         print("=" * 50)
         try:
-            choice = input(" 번호 입력 (1-4) [기본: 1]: ").strip()
+            choice = input(" 번호 입력 (1-6) [기본: 1]: ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\n종료합니다.")
             sys.exit(0)
 
-        choice_map = {"1": "pass", "2": "fail", "3": "fail_led", "4": "reposition", "": "pass"}
+        choice_map = {"1": "pass", "2": "fail", "3": "fail_led", "4": "reposition", "5": "error", "6": "manual_return", "": "pass"}
         scenario = choice_map.get(choice, "pass")
 
     station.run_simulation(scenario=scenario)
