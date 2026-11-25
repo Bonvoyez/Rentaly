@@ -16,6 +16,8 @@ npm run dev
 - 관리자: `http://localhost:5173/admin/login` (`admin` / `admin`, Mock 인증)
 - 검사대: `http://localhost:5173/kiosk`
 
+로컬 개발에서 React 개발 도구를 끄려면 선택적으로 `VITE_DISABLE_REACT_DEVTOOLS`를 설정합니다. 운영 빌드에는 필요하지 않습니다.
+
 ## 가짜 검사대 연동
 
 브라우저는 MQTT over WebSocket을 사용하고 `mock/mock_edge.py`는 일반 MQTT를 사용합니다. 두 클라이언트가 같은 Mosquitto 인스턴스를 사용하도록 프로젝트의 `mosquitto.conf`가 MQTT `1883`과 WebSocket `9001`을 함께 엽니다. Windows Mosquitto 서비스가 이미 1883을 사용 중이면 먼저 해당 서비스를 중지한 뒤 아래 개발 브로커를 실행하세요.
@@ -48,15 +50,15 @@ python mock/mock_edge.py --scenario pass
 
 macOS/Linux에서는 가상환경 활성화 명령을 `source venv/bin/activate`로 바꿉니다.
 
-개발용 기본 연결은 `.env.development`의 `ws://localhost:9001`, 장비 ID `station-01`입니다. Mock Edge의 기본 MQTT 주소는 문서 명세 그대로 `localhost:1883`입니다. 시뮬레이터의 REST 결과 전송은 백엔드용이며 프론트엔드는 `POST /api/v1/inspections`를 호출하지 않습니다.
+개발용 연결 값은 `.env.development`를 확인하세요. Mock Edge의 기본 MQTT 주소는 `docs/API_CONTRACT.md`를 따릅니다. 시뮬레이터의 REST 결과 전송은 백엔드용이며 프론트엔드는 `POST /api/v1/inspections`를 호출하지 않습니다.
 
 > `mosquitto.conf`의 anonymous 설정은 로컬 개발 전용입니다.
 
 ## 키오스크 카메라 프리뷰
 
-첫 화면은 `VITE_CAMERA_FEED_URL`의 MJPEG 스트림을 `<img>`로 표시합니다. 영상은 프리뷰 영역 전체를 채우고 파란 보드 배치 가이드는 영상 위에 겹쳐집니다. 스트림 로드가 실패하면 예시 이미지와 연결 안내를 표시합니다. 검사 진행 화면의 촬영 이미지는 별도로 MQTT 메시지에서 받습니다.
+첫 화면과 검사 진행 화면은 `VITE_CAMERA_FEED_URL`의 MJPEG 스트림을 `<img>`로 표시합니다. 첫 화면에서는 파란 보드 배치 가이드가 영상 위에 겹쳐집니다. 스트림이 없거나 로드에 실패하면 예시 이미지를 표시하며, 검사 중에는 MQTT로 받은 촬영 이미지가 있으면 이를 대신 표시합니다.
 
-현재 기본 URL은 `https://mainly-choices-delivers-fork.trycloudflare.com/video_feed`입니다. `trycloudflare.com` 터널 주소가 바뀌면 키오스크 Vercel 프로젝트의 `VITE_CAMERA_FEED_URL`을 변경하고 **재배포**하세요. 이 주소는 브라우저에서 직접 요청하므로 사용자에게 공개됩니다. 카메라 스트림 운영은 Vercel 프론트엔드 배포와 별개입니다.
+카메라 주소는 `VITE_CAMERA_FEED_URL`로만 관리합니다. 터널 주소가 바뀌면 환경 변수를 변경하고 **재배포**하세요. 주소는 브라우저에 공개되며, 카메라 스트림 운영은 Vercel 프론트엔드 배포와 별개입니다. “검사 시작”은 MQTT 연결이 있을 때 `inspection/{device_id}/command`에 `{"action":"START"}`를 발행합니다. 발행에 실패하면 첫 화면에 머물며 오류를 표시합니다.
 
 ## Vercel 배포
 
@@ -91,23 +93,23 @@ npx vercel@latest --prod --yes
 
 ### 키오스크 프로젝트 환경변수
 
-Vercel 프로젝트의 Settings > Environment Variables에 다음 값을 등록합니다. MQTT 인증 정보는 명세에 따라 비워둡니다.
+Vercel 프로젝트의 Settings > Environment Variables에 값을 등록합니다. 실제 값은 `.env.example`을 참고하고 운영 값은 Vercel에서 관리합니다.
 
-```text
-VITE_APP_MODE=kiosk
-VITE_MQTT_BROKER_URL=wss://rentaly.duckdns.org/mqtt
-VITE_DEVICE_ID=station-01
-VITE_CAMERA_FEED_URL=https://mainly-choices-delivers-fork.trycloudflare.com/video_feed
-```
+| 변수 | 용도 |
+| --- | --- |
+| `VITE_APP_MODE` | 키오스크 화면만 활성화 |
+| `VITE_MQTT_BROKER_URL` | 검사 진행 정보를 받는 MQTT WebSocket 주소 |
+| `VITE_DEVICE_ID` | 구독할 검사대 장비 ID |
+| `VITE_CAMERA_FEED_URL` | 첫 화면과 검사 진행 화면의 카메라 스트림 주소 |
 
 ### 관리자 프로젝트 환경변수
 
-```text
-VITE_APP_MODE=admin
-VITE_API_BASE_URL=https://rentaly.duckdns.org
-```
+| 변수 | 용도 |
+| --- | --- |
+| `VITE_APP_MODE` | 관리자 화면만 활성화 |
+| `VITE_API_BASE_URL` | 관리자 REST API 서버 주소 |
 
-Vercel 페이지는 HTTPS로 제공되므로 로컬 전용 `ws://localhost:9001`에는 연결할 수 없습니다. 키오스크 배포는 명세에 확정된 TLS WebSocket 주소 `wss://rentaly.duckdns.org/mqtt`를 사용합니다.
+Vercel 페이지는 HTTPS로 제공되므로 키오스크의 MQTT WebSocket 주소도 `wss://`를 사용해야 합니다.
 
 `VITE_APP_MODE=admin`에서는 기존 관리자 화면에 실제 서버의 JWT 로그인, 관리자 권한 확인, 검사 목록·상세·보호 이미지 조회 및 검토 대기 건 판정 확정을 연결합니다. 토큰은 현재 탭의 sessionStorage에 저장하며 로그아웃과 401 응답 시 삭제합니다. 비밀번호는 저장하지 않습니다. 장비 관리 API가 없어 해당 탭은 `Mock 장비 데이터`로 표시되는 로컬 시연 기능입니다. combined 모드는 기존 로컬 Mock 개발용입니다.
 

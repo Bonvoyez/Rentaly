@@ -20,6 +20,17 @@
 
 ## 2. 실시간 텔레메트리 규격 (MQTT)
 
+### 검사 시작 명령 (프론트엔드 → 검사대)
+
+“검사 시작” 버튼을 누르면 프론트엔드는 연결된 MQTT 브로커에 다음 명령을 발행합니다. `{device_id}`에는 키오스크의 `VITE_DEVICE_ID`를 사용합니다.
+
+```text
+Topic: inspection/{device_id}/command
+Payload: {"action":"START"}
+```
+
+발행 후 검사 진행 상태는 아래 텔레메트리 토픽에서 받습니다.
+
 ### 📌 토픽 (Topic)
 ```text
 inspection/{device_id}/telemetry

@@ -63,8 +63,12 @@ export function parseTelemetry(payload: Uint8Array): Telemetry {
 }
 
 export type TelemetryConnection = 'connecting' | 'connected' | 'disconnected' | 'error'
+export type TelemetrySession = {
+  readonly close: () => void
+  readonly publishStart: () => Promise<boolean>
+}
 
-export function subscribeToTelemetry(brokerUrl: string, deviceId: string, onTelemetry: (telemetry: Telemetry) => void, onConnection: (state: TelemetryConnection) => void): () => void {
+export function subscribeToTelemetry(brokerUrl: string, deviceId: string, onTelemetry: (telemetry: Telemetry) => void, onConnection: (state: TelemetryConnection) => void): TelemetrySession {
   const client: MqttClient = mqtt.connect(brokerUrl)
   const topic = `inspection/${deviceId}/telemetry`
   onConnection('connecting')
@@ -82,5 +86,11 @@ export function subscribeToTelemetry(brokerUrl: string, deviceId: string, onTele
     }
     onTelemetry(telemetry)
   })
-  return () => client.end(true)
+  return {
+    close: () => client.end(true),
+    publishStart: () => new Promise<boolean>(resolve => {
+      if (!client.connected) { resolve(false); return }
+      client.publish(`inspection/${deviceId}/command`, JSON.stringify({ action: 'START' }), { qos: 0, retain: false }, error => resolve(!error))
+    }),
+  }
 }
