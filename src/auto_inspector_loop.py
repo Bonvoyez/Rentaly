@@ -147,6 +147,10 @@ class AutoInspectionManager:
 
             time.sleep(0.03)
 
+        if captured_frame is None:
+            print("🛑 캡처 없이 안정화 루프가 종료되었습니다.")
+            return
+
         # [2단계: YOLO 끄고 VLM 정밀 검사 진입]
         with self.lock:
             self.state = STATE_INSPECTING
