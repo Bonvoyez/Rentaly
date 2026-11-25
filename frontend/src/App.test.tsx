@@ -43,7 +43,9 @@ describe('Rentaly routes', () => {
 
     const preview = screen.getByRole('img', { name: '실시간 카메라 프리뷰' })
     expect(preview).toHaveAttribute('src', 'https://camera.example.com/video_feed')
-    expect(screen.getByLabelText('보드 배치 가이드')).toBeVisible()
+    expect(preview.parentElement).toHaveClass('h-[200px]', 'w-[282px]')
+    expect(preview).toHaveClass('object-cover')
+    expect(screen.getByLabelText('보드 배치 가이드')).toHaveClass('inset-7')
 
     fireEvent.error(preview)
     expect(screen.getByRole('img', { name: '검사대 중앙에 놓인 Raspberry Pi 보드' })).toBeVisible()
