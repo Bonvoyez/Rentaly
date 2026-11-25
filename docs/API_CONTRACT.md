@@ -20,6 +20,17 @@
 
 ## 2. 실시간 텔레메트리 규격 (MQTT)
 
+### 검사 시작 명령 (프론트엔드 → 검사대)
+
+“검사 시작” 버튼을 누르면 프론트엔드는 연결된 MQTT 브로커에 다음 명령을 발행합니다. `{device_id}`에는 키오스크의 `VITE_DEVICE_ID`를 사용합니다.
+
+```text
+Topic: inspection/{device_id}/command
+Payload: {"action":"START"}
+```
+
+발행 후 검사 진행 상태는 아래 텔레메트리 토픽에서 받습니다.
+
 ### 📌 토픽 (Topic)
 ```text
 inspection/{device_id}/telemetry
@@ -38,7 +49,8 @@ inspection/{device_id}/telemetry
   "progress_percent": 75,
   "blur_score": 182.4,
   "stabilization_ms": 320,
-  "message": "AI 외관 결함 분석을 진행 중입니다..."
+  "message": "AI 외관 결함 분석을 진행 중입니다...",
+  "capture_image_url": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ..."
 }
 ```
 
@@ -52,6 +64,7 @@ inspection/{device_id}/telemetry
 | `blur_score` | float | 카메라 영상의 선명도 점수 (라플라시안 분산) | `150.2` (높을수록 선명함) |
 | `stabilization_ms`| int | 모션 흔들림 안정화까지 걸린 시간 (ms) | `320` |
 | `message` | string | 사용자 화면(UI)에 띄울 한글 안내 메시지 | `"장비가 거치되었습니다."` |
+| `capture_image_url` | string (선택) | 촬영 직후 키오스크에 표시할 JPEG Base64 Data URL. 이후 단계에서 생략해도 키오스크는 해당 검사 중 이미지를 유지합니다. | `"data:image/jpeg;base64,..."` |
 
 #### `stage` (검사 단계) 구분:
 1. `MOUNTED`: 보드가 거치대 스위치에 정상 안착됨 감지

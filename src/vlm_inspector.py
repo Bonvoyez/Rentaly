@@ -22,6 +22,20 @@ import urllib.error
 import cv2
 import numpy as np
 
+# .env 자동 로드 (보안 키 격리)
+def _load_env_file():
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    if k.strip() not in os.environ:
+                        os.environ[k.strip()] = v.strip().strip('"').strip("'")
+
+_load_env_file()
+
 # FactChat Gateway 설정 (환경변수에서 우선 로드)
 FACTCHAT_URL = os.getenv("LLM_BASE_URL", "https://factchat-cloud.mindlogic.ai/v1/gateway/chat/completions")
 FACTCHAT_API_KEY = os.getenv("LLM_API_KEY", "")
@@ -35,7 +49,7 @@ Inspect the board image and return ONLY a strict JSON object with these keys:
   "is_raspberry_pi": true or false,
   "is_fully_visible": true or false (true ONLY IF all 4 borders/edges of the PCB board are completely inside the frame without being cropped or partially out of view),
   "primary_verdict": "PASS" or "FAIL" or "REPOSITION",
-  "defect_type": "NONE" or "CROPPED_OR_CUT_OFF" or "CHIP_DAMAGE" or "BENT_PIN" or "PORT_DAMAGE" or "FOREIGN_SUBSTANCE_OR_DRAWING" or "MISSING_PARTS",
+  "defect_type": "NONE" or "OCCLUDED_BY_HAND" or "CROPPED_OR_CUT_OFF" or "CHIP_DAMAGE" or "BENT_PIN" or "PORT_DAMAGE" or "FOREIGN_SUBSTANCE_OR_DRAWING" or "MISSING_PARTS",
   "pwr_led_status": true or false (check if onboard PWR red LED is glowing/solid ON),
   "ic_id_text": "extracted IC certification number (e.g., 20953-RPI4B) or empty",
   "fcc_id_text": "extracted FCC ID (e.g., 2ABCB-RPI4B) or empty",
@@ -45,12 +59,24 @@ Inspect the board image and return ONLY a strict JSON object with these keys:
   "reason": "Clear explanation in Korean why PASS, FAIL, or REPOSITION (explicitly mention if board is cut off, pen markings, chip defect, etc.)"
 }
 Strict Verification Rules:
-1. [Boundary & Cut-off Rule]: If the Raspberry Pi board is cut off, cropped, or any of its 4 edges are outside the image frame, you MUST set is_fully_visible=false, primary_verdict="REPOSITION", defect_type="CROPPED_OR_CUT_OFF", and reason="보드가 화면 밖으로 잘려 있습니다. 보드 전체가 화면 중앙에 들어오도록 재배치해주세요."
-2. [Asset Tag & Sticker Exception]: Asset management tags, post-it notes, barcode stickers, or label stickers (e.g., 'RPI4-01' on LAN/USB port) attached for inventory tracking are STRICTLY PERMITTED and are NOT defects! Read the text on this label and put it into 'device_unique_id'.
-3. [Port Marker Markings]: Minor identification pen marks (like 'AvA') on metal shielding/port surfaces are acceptable management markings and should NOT fail the board unless the green PCB circuit or silicon chips themselves are vandalized.
-4. [True Defect Rule]: If someone drew, colored, scratched, or spilled foreign substances directly on the GREEN PCB BOARD TRACES or SILICON CHIPS (CPU, RAM, PMIC), or if pins are bent/chips cracked, you MUST set primary_verdict="FAIL", defect_type="FOREIGN_SUBSTANCE_OR_DRAWING".
-5. [Identifier Extraction]: Carefully read the silkscreen for IC: 20953-RPI4B, FCC ID: 2ABCB-RPI4B, and extract asset label text into device_unique_id.
-6. [Pass Condition]: Set primary_verdict="PASS" if the board is fully visible, has legitimate asset tags (like RPI4-01), no PCB trace damage/cracks/bent pins, and core parts are intact.
+1. [Human Hand / Obstacle Occlusion Rule]: If a human hand, fingers, skin, or any foreign holding object (or loose ribbon cable laying across core components) is touching or covering the board, or visible in the frame handling the board, you MUST IMMEDIATELY set is_fully_visible=false, primary_verdict="REPOSITION", defect_type="FOREIGN_SUBSTANCE_OR_DRAWING", and reason="손이나 이물질이 감지되었습니다. 손을 완전히 떼고 보드만 놓아주세요." NEVER pass an image where human fingers or hands are visible!
+2. [Boundary & Cut-off Rule]: If the Raspberry Pi board is cut off, cropped, or any of its 4 edges are outside the image frame, you MUST set is_fully_visible=false, primary_verdict="REPOSITION", defect_type="CROPPED_OR_CUT_OFF", and reason="보드가 화면 밖으로 잘려 있습니다. 보드 전체가 화면 중앙에 들어오도록 재배치해주세요."
+3. [Power LED (PWR LED) Verification Rule - MANDATORY]:
+   - Locate the PWR LED near the USB-C power input (top-right corner of the board).
+   - CAMERA FILTER NOTE: Due to infrared (IR) / camera optical filters, the illuminated LED may appear as a bright PURPLE, PINK, RED, or intense glowing WHITE light spot/glare rather than pure red.
+   - [LED ON condition]: If there is an active, bright illuminating point of light (glowing dot, light spread, or glare in red/pink/purple/white) at the PWR LED position, set pwr_led_status=true.
+   - [LED OFF condition]: If there is NO light emission, NO glowing dot, and only the dark unlit physical SMD component is visible (or USB-C power disconnected), you MUST set pwr_led_status=false, primary_verdict="FAIL", defect_type="PORT_DAMAGE", and reason="전원 PWR LED가 꺼져 있습니다. 전원 공급 및 보드 상태를 확인해 주세요."
+   - If pwr_led_status is false, NEVER set primary_verdict="PASS"! Output primary_verdict="FAIL".
+4. [Asset Tag & Sticker Exception]: Asset management tags, post-it notes, barcode stickers, or label stickers (e.g., 'RPI4-01' on LAN/USB port) attached for inventory tracking are STRICTLY PERMITTED and are NOT defects! Read the text on this label and put it into 'device_unique_id'.
+5. [Port Marker Markings]: Minor identification pen marks (like 'AvA') on metal shielding/port surfaces are acceptable management markings and should NOT fail the board unless the green PCB circuit or silicon chips themselves are vandalized.
+6. [True Defect Rule]: If someone drew, colored, scratched, or spilled foreign substances directly on the GREEN PCB BOARD TRACES or SILICON CHIPS (CPU, RAM, PMIC), or if pins are bent/chips cracked, you MUST set primary_verdict="FAIL", defect_type="FOREIGN_SUBSTANCE_OR_DRAWING".
+7. [Identifier Extraction]: Carefully read the silkscreen for IC: 20953-RPI4B, FCC ID: 2ABCB-RPI4B, and extract asset label text into device_unique_id.
+8. [Pass Condition]: Set primary_verdict="PASS" ONLY IF:
+   - NO human hands/fingers in frame
+   - Board fully visible and flat
+   - pwr_led_status is TRUE (solid red PWR LED glowing)
+   - Legitimate asset tags present without PCB/chip damage or bent pins.
+   If pwr_led_status is FALSE, NEVER set primary_verdict="PASS"! Output primary_verdict="FAIL".
 Output ONLY the JSON object. No markdown backticks, no other text."""
 
 
