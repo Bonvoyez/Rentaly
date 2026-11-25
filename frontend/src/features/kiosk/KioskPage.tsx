@@ -279,6 +279,7 @@ function ReadyCameraPreview() {
 }
 const CANDIDATE_FEEDS = [
   import.meta.env.VITE_CAMERA_FEED_URL,
+  "https://thing-vintage-excerpt-exists.trycloudflare.com/video_feed",
   "https://rebates-chosen-cellular-linking.trycloudflare.com/video_feed",
   "https://arab-sunrise-therapeutic-jackie.trycloudflare.com/video_feed",
 ].filter(Boolean) as string[];
