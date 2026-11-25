@@ -277,24 +277,82 @@ function ReadyCameraPreview() {
     </div>
   );
 }
-function CameraImage({ fallbackImageUrl, fallbackAlt, className }: { readonly fallbackImageUrl: string; readonly fallbackAlt: string; readonly className: string }) {
-  const cameraFeedUrl = import.meta.env.VITE_CAMERA_FEED_URL;
-  const [failed, setFailed] = useState(!cameraFeedUrl);
-  return <>
+const CANDIDATE_FEEDS = [
+  import.meta.env.VITE_CAMERA_FEED_URL,
+  "https://rebates-chosen-cellular-linking.trycloudflare.com/video_feed",
+  "https://arab-sunrise-therapeutic-jackie.trycloudflare.com/video_feed",
+].filter(Boolean) as string[];
+
+function CameraImage({
+  imageUrl,
+  fallbackImageUrl,
+  fallbackAlt,
+  className,
+}: {
+  readonly imageUrl?: string | null;
+  readonly fallbackImageUrl: string;
+  readonly fallbackAlt: string;
+  readonly className: string;
+}) {
+  const [feedIndex, setFeedIndex] = useState(0);
+  const [allFailed, setAllFailed] = useState(false);
+
+  // 캡처 이미지가 있으면 캡처 이미지 우선 사용
+  if (imageUrl) {
+    return (
+      <img
+        src={imageUrl}
+        alt={fallbackAlt}
+        className={`h-full w-full ${className}`}
+      />
+    );
+  }
+
+  const currentFeed = CANDIDATE_FEEDS[feedIndex];
+
+  const handleError = () => {
+    if (feedIndex + 1 < CANDIDATE_FEEDS.length) {
+      setFeedIndex((prev) => prev + 1);
+    } else {
+      setAllFailed(true);
+    }
+  };
+
+  if (allFailed || !currentFeed) {
+    return (
+      <>
+        <img
+          src={fallbackImageUrl}
+          alt={fallbackAlt}
+          className={`h-full w-full ${className}`}
+        />
+        <span className="absolute bottom-1 left-1 rounded bg-slate-900/75 px-1.5 py-0.5 text-[10px] text-white">
+          카메라 연결 안 됨
+        </span>
+      </>
+    );
+  }
+
+  return (
     <img
-      src={failed ? fallbackImageUrl : cameraFeedUrl}
-      alt={failed ? fallbackAlt : "실시간 카메라 프리뷰"}
-      onError={() => setFailed(true)}
+      key={currentFeed}
+      src={currentFeed}
+      alt="실시간 카메라 프리뷰"
+      onError={handleError}
       className={`h-full w-full ${className}`}
     />
-    {failed && <span className="absolute bottom-1 left-1 rounded bg-slate-900/75 px-1.5 py-0.5 text-[10px] text-white">카메라 연결 안 됨</span>}
-  </>;
+  );
 }
 function ProgressCameraPreview({ captureImageUrl }: { readonly captureImageUrl: string | null }) {
   return (
     <div className="absolute left-6 top-[174px] h-[186px] w-[370px] overflow-hidden rounded-2xl border border-line-soft bg-slate-50 p-4 dark:border-[#334155] dark:bg-[#182231]">
       <div className="relative h-full w-full overflow-hidden rounded-lg">
-        <CameraImage fallbackImageUrl={captureImageUrl ?? boardImage} fallbackAlt={captureImageUrl ? "검사대에서 촬영한 Raspberry Pi 보드" : "검사대 중앙에 놓인 Raspberry Pi 보드"} className="object-contain" />
+        <CameraImage
+          imageUrl={captureImageUrl}
+          fallbackImageUrl={boardImage}
+          fallbackAlt={captureImageUrl ? "검사대에서 촬영한 Raspberry Pi 보드" : "검사대 중앙에 놓인 Raspberry Pi 보드"}
+          className="object-contain"
+        />
       </div>
     </div>
   );

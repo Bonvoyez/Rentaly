@@ -23,7 +23,7 @@ except ImportError:
     HAS_PAHO = False
 
 MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "rentaly.duckdns.org")
-MQTT_PORT = int(os.getenv("MQTT_BROKER_PORT", "1883"))
+MQTT_PORT = int(os.getenv("MQTT_BROKER_PORT", "443"))
 DEVICE_ID = os.getenv("DEVICE_ID", "station-01")
 
 
@@ -38,11 +38,20 @@ class MqttTelemetryClient:
 
         if HAS_PAHO:
             try:
-                # MQTT 클라이언트 초기화 (v1/v2 호환)
-                try:
-                    self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, f"edge-{self.device_id}-{int(time.time())}")
-                except Exception:
-                    self.client = mqtt.Client(f"edge-{self.device_id}-{int(time.time())}")
+                client_id = f"edge-{self.device_id}-{int(time.time())}"
+                # 포트 443일 경우 WSS(WebSocket over SSL) 적용
+                if self.port == 443:
+                    try:
+                        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id, transport="websockets")
+                    except Exception:
+                        self.client = mqtt.Client(client_id, transport="websockets")
+                    self.client.tls_set()
+                    self.client.ws_set_options(path="/mqtt")
+                else:
+                    try:
+                        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id)
+                    except Exception:
+                        self.client = mqtt.Client(client_id)
 
                 self.client.on_connect = self._on_connect
                 self.client.on_disconnect = self._on_disconnect
@@ -64,7 +73,7 @@ class MqttTelemetryClient:
         self.connected = False
         print("⚠️ [MQTT] 브로커 연결 해제됨")
 
-    def publish_telemetry(self, inspection_id, stage, progress_percent, message, blur_score=180.0, stabilization_ms=300, capture_image_url=None):
+    def publish_telemetry(self, inspection_id, stage, progress_percent, message, blur_score=180.0, stabilization_ms=300, capture_image_url=None, primary_verdict=None, reposition_count=1):
         """프론트엔드 키오스크로 실시간 텔레메트리 페이로드를 발행합니다."""
         payload = {
             "inspection_id": str(inspection_id),
@@ -77,6 +86,10 @@ class MqttTelemetryClient:
         }
         if capture_image_url:
             payload["capture_image_url"] = str(capture_image_url)
+        if stage == "COMPLETED":
+            payload["primary_verdict"] = primary_verdict if primary_verdict in ["PASS", "FAIL"] else ("PASS" if "PASS" in message else "FAIL")
+        elif stage == "REPOSITION":
+            payload["reposition_count"] = int(reposition_count)
 
         json_str = json.dumps(payload, ensure_ascii=False)
         has_img = " (사진 포함)" if capture_image_url else ""
