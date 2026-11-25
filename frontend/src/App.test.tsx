@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ThemeProvider } from './components/ThemeProvider'
@@ -34,6 +34,20 @@ describe('Rentaly routes', () => {
 
     // Then
     expect(screen.getByRole('heading', { name: '반납을 시작할까요?' })).toBeVisible()
+  })
+
+  it('shows the camera feed behind the placement guide and falls back when it fails', () => {
+    vi.stubEnv('VITE_CAMERA_FEED_URL', 'https://camera.example.com/video_feed')
+    window.history.replaceState({}, '', '/kiosk')
+    renderApp()
+
+    const preview = screen.getByRole('img', { name: '실시간 카메라 프리뷰' })
+    expect(preview).toHaveAttribute('src', 'https://camera.example.com/video_feed')
+    expect(screen.getByLabelText('보드 배치 가이드')).toBeVisible()
+
+    fireEvent.error(preview)
+    expect(screen.getByRole('img', { name: '검사대 중앙에 놓인 Raspberry Pi 보드' })).toBeVisible()
+    expect(screen.getByLabelText('보드 배치 가이드')).toBeVisible()
   })
 
   it('labels the admin authentication flow as mock-backed', () => {
