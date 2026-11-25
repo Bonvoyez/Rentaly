@@ -1,8 +1,11 @@
-from datetime import datetime
-from typing import Any, List, Literal, Optional
+from datetime import datetime, timezone
+from typing import Annotated, Any, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+
+# DB는 UTC를 시간대 없이 저장하므로 응답에 UTC 표시를 붙임
+UTCDateTime = Annotated[datetime, AfterValidator(lambda v: v if v.tzinfo else v.replace(tzinfo=timezone.utc))]
 
 
 # =============================================================================
@@ -81,7 +84,7 @@ class AdminUserResponse(BaseModel):
     admin_id: str
     account: str
     role: str = "ADMIN"
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 # =============================================================================
@@ -106,7 +109,7 @@ class ImageMetaResponse(BaseModel):
 
     image_id: str
     file_size_bytes: int
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class AuditLogResponse(BaseModel):
@@ -116,7 +119,7 @@ class AuditLogResponse(BaseModel):
     admin_id: str
     action: str
     reason: Optional[str] = None
-    created_at: datetime
+    created_at: UTCDateTime
 
 
 class InspectionSummaryResponse(BaseModel):
@@ -128,7 +131,7 @@ class InspectionSummaryResponse(BaseModel):
     primary_verdict: str
     final_status: str
     reposition_count: int
-    inspected_at: datetime
+    inspected_at: UTCDateTime
     total_duration_ms: Optional[int] = None
 
 
