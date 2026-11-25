@@ -45,6 +45,7 @@ DATASET_RAW_DIR = os.path.join(BASE_DIR, "dataset", "raw_images")
 os.makedirs(DATASET_RAW_DIR, exist_ok=True)
 
 last_inspection_result = None
+reposition_count = 0
 last_inspection_bgr = None
 
 # 체계적인 20가지 정밀 시나리오 프리셋
@@ -715,7 +716,7 @@ def _send_result_to_backend(insp_id, res_dict, img_bgr):
         return backend_res
 
 def process_and_inspect(img_bgr):
-    global last_inspection_result, last_inspection_bgr
+    global last_inspection_result, last_inspection_bgr, reposition_count
     last_inspection_bgr = img_bgr.copy()
     insp_id = str(uuid.uuid4())
     publisher = get_telemetry_publisher()
@@ -747,12 +748,14 @@ def process_and_inspect(img_bgr):
 
     # 2. LED 확인 단계
     pwr_on = bool(result.get("pwr_led_status", False))
-    if not pwr_on:
-        # PWR LED가 꺼져있으면 무조건 FAIL로 강제 전환
+    if not pwr_on and result.get("primary_verdict") != "REPOSITION":
+        # REPOSITION(손 가림/잘림)이 아닐 때만 PWR LED 미점등을 FAIL로 강제 전환
         result["primary_verdict"] = "FAIL"
         if not result.get("reason"):
             result["reason"] = "전원 PWR LED가 꺼져 있습니다."
         led_msg = "PWR LED 미점등 (전원 불량)"
+    elif not pwr_on:
+        led_msg = "보드가 가려지거나 잘려 LED 확인 불가"
     else:
         led_msg = "온보드 PWR LED 정상 점등 확인"
 
@@ -767,8 +770,6 @@ def process_and_inspect(img_bgr):
 
     time.sleep(0.4)
 
-    # 3. AI 외관 검사 단계
-    verdict = result.get("primary_verdict", "FAIL")
     # 3. AI 외관 검사 단계
     verdict = result.get("primary_verdict", "FAIL")
     publisher.publish_telemetry(
@@ -790,15 +791,18 @@ def process_and_inspect(img_bgr):
         led_ctrl.set_fail_or_reposition()
 
     if verdict == "REPOSITION":
+        reposition_count += 1
         publisher.publish_telemetry(
             inspection_id=insp_id,
             stage="REPOSITION",
             progress_percent=100,
             message=result.get("reason", "보드를 다시 놓아주세요."),
             blur_score=blur_score,
-            stabilization_ms=300
+            stabilization_ms=300,
+            reposition_count=reposition_count
         )
     else:
+        reposition_count = 0
         publisher.publish_telemetry(
             inspection_id=insp_id,
             stage="COMPLETED",
