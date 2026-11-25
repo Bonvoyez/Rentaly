@@ -1,11 +1,54 @@
+import { useEffect, useState } from 'react'
 import { ClipboardList, LogOut, MonitorCog } from 'lucide-react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Navigate, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { ThemeToggle } from '../../components/ui'
-import { AdminViewport } from './AdminViewport'
+import { adminApi, clearSession } from '../../services/admin-api'
 
-const navClass = ({ isActive }: { readonly isActive: boolean }) => `flex h-11 items-center gap-3 rounded-xl px-4 text-sm transition-colors ${isActive ? 'bg-primary-soft font-semibold text-primary dark:bg-primary/15' : 'text-secondary hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`
+const navClass = ({ isActive }: { readonly isActive: boolean }) =>
+  `flex h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-2 text-sm transition-colors md:justify-start md:gap-3 md:px-4 ${isActive
+    ? 'bg-primary-soft font-semibold text-primary dark:bg-dark-selected dark:text-dark-accent'
+    : 'text-secondary hover:bg-slate-100 dark:text-dark-secondary dark:hover:bg-dark-hover'}`
 
-export function AdminShell() {
+export function AdminShell({ live = false }: { readonly live?: boolean }) {
   const navigate = useNavigate()
-  return <AdminViewport><div className="grid h-[900px] w-[1440px] grid-cols-[220px_minmax(0,1fr)] overflow-hidden rounded-[18px] border border-line bg-white dark:border-[#273446] dark:bg-[#121a26]"><aside className="relative h-full bg-[#fbfcfd] px-3.5 py-6 dark:bg-[#0f1722]"><div className="ml-2 text-lg font-bold text-primary">반납검사</div><span className="mb-8 ml-2 mt-0.5 block text-xs text-muted">admin0301 · Mock</span><nav aria-label="관리자 메뉴" className="grid gap-1"><NavLink className={navClass} to="/admin/inspections"><ClipboardList className="size-4" />검사 이력</NavLink><NavLink className={navClass} to="/admin/devices"><MonitorCog className="size-4" />장비 관리</NavLink></nav><div className="absolute bottom-6 left-5 right-5 grid gap-2"><ThemeToggle /><button type="button" onClick={() => navigate('/admin/login')} className="flex min-h-10 items-center gap-2 px-2 text-xs text-muted hover:text-danger"><LogOut className="size-4" />로그아웃</button></div></aside><main className="min-h-0 overflow-y-auto bg-white dark:bg-[#121a26]"><Outlet /></main></div></AdminViewport>
+  const [account, setAccount] = useState<string>()
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!live) return
+    let active = true
+    const expire = () => navigate('/admin/login?reason=expired', { replace: true })
+    window.addEventListener('rentaly-session-expired', expire)
+    void adminApi.me().then(user => {
+      if (active) {
+        if (user.role === 'ADMIN') setAccount(user.account)
+        else navigate('/admin/forbidden', { replace: true })
+      }
+    }).catch(() => { if (active) setError('관리자 정보를 확인하지 못했습니다. 다시 로그인해 주세요.') })
+    return () => { active = false; window.removeEventListener('rentaly-session-expired', expire) }
+  }, [live, navigate])
+
+  if (live && !sessionStorage.getItem('rentaly-token')) return <Navigate to="/admin/login" replace />
+
+  return <div className="min-h-[100dvh] bg-canvas p-2 sm:p-4 dark:bg-dark-canvas">
+    <div className="mx-auto grid min-h-[calc(100dvh-1rem)] w-full max-w-[1440px] overflow-hidden rounded-[18px] border border-line bg-white sm:min-h-[calc(100dvh-2rem)] md:grid-cols-[220px_minmax(0,1fr)] dark:border-dark-line dark:bg-dark-surface">
+      <aside className="grid grid-cols-2 gap-2 border-b border-line-soft bg-[#fbfcfd] p-3 sm:p-5 md:flex md:flex-col md:items-stretch md:gap-0 md:border-b-0 md:border-r dark:border-dark-line dark:bg-dark-sidebar">
+        <div className="col-span-2 flex min-w-0 items-baseline justify-between gap-2 md:block">
+          <span className="shrink-0 text-lg font-bold text-primary dark:text-dark-accent">반납검사</span>
+          <span className="truncate text-right text-xs text-muted md:mb-8 md:mt-1 md:block md:text-left dark:text-dark-secondary">{live ? `${account ?? '관리자 확인 중…'} · 관리자` : 'admin0301 · Mock'}</span>
+        </div>
+        <nav aria-label="관리자 메뉴" className="col-span-2 grid grid-cols-2 gap-2 md:grid-cols-1 md:gap-1">
+          <NavLink className={navClass} to="/admin/inspections"><ClipboardList className="size-4 shrink-0" />검사 이력</NavLink>
+          <NavLink className={navClass} to="/admin/devices"><MonitorCog className="size-4 shrink-0" />장비 관리</NavLink>
+        </nav>
+        <div className="col-span-2 grid grid-cols-2 gap-2 md:mt-auto md:grid-cols-1 md:gap-1">
+          <ThemeToggle className="w-full justify-center md:justify-start" />
+          <button type="button" onClick={() => { if (live) clearSession(); navigate('/admin/login') }} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-line-soft px-2 text-xs text-secondary hover:bg-slate-100 hover:text-danger md:justify-start md:border-transparent dark:border-dark-control dark:text-dark-secondary dark:hover:bg-dark-hover dark:hover:text-rose-300"><LogOut className="size-4" />로그아웃</button>
+        </div>
+      </aside>
+      <main className="min-w-0 overflow-y-auto bg-white dark:bg-dark-surface">
+        {error ? <p role="alert" className="p-10 text-danger dark:text-rose-300">{error}</p> : live && !account ? <p role="status" className="p-10">관리자 확인 중…</p> : <Outlet />}
+      </main>
+    </div>
+  </div>
 }
