@@ -6,6 +6,12 @@ import { VerdictOption } from './InspectionDetailPage'
 
 type Verdict = 'CONFIRMED_PASS' | 'CONFIRMED_REJECT'
 
+function initialVerdict(detail: InspectionDetail): Verdict {
+  return detail.final_status.includes('REJECT') ||
+    (detail.final_status === 'PENDING_REVIEW' && detail.primary_verdict === 'FAIL')
+    ? 'CONFIRMED_REJECT' : 'CONFIRMED_PASS'
+}
+
 export function LiveInspectionDetail() {
   const navigate = useNavigate()
   const { inspectionId = '' } = useParams()
@@ -24,7 +30,7 @@ export function LiveInspectionDetail() {
     void adminApi.detail(inspectionId).then(async result => {
       if (!active) return
       setDetail(result)
-      setVerdict(result.final_status.includes('REJECT') ? 'CONFIRMED_REJECT' : 'CONFIRMED_PASS')
+      setVerdict(initialVerdict(result))
       const image = result.images[0]
       if (image) {
         try {
@@ -40,7 +46,7 @@ export function LiveInspectionDetail() {
   const passed = detail?.final_status === 'PASS' || detail?.final_status === 'CONFIRMED_PASS'
   const rejected = detail?.final_status.includes('REJECT') ?? false
   const editable = pending || passed || rejected
-  const savedVerdict: Verdict = rejected ? 'CONFIRMED_REJECT' : 'CONFIRMED_PASS'
+  const savedVerdict: Verdict = detail ? initialVerdict(detail) : 'CONFIRMED_PASS'
   const reasonRequired = editable && verdict !== savedVerdict
   const led = detail?.ai_result?.pwr_led_status
   const defects = detail?.ai_result?.detected_defects
@@ -71,7 +77,7 @@ export function LiveInspectionDetail() {
           ? await adminApi.retroactiveReject(inspectionId, reason.trim())
           : await adminApi.confirm(inspectionId, verdict, reason.trim())
       setDetail(updated)
-      setVerdict(updated.final_status.includes('REJECT') ? 'CONFIRMED_REJECT' : 'CONFIRMED_PASS')
+      setVerdict(initialVerdict(updated))
       setReason('')
       setConfirming(false)
     } catch {

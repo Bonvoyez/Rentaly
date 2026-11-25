@@ -10,6 +10,19 @@ vi.mock('../../services/admin-api', () => ({
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
+it('selects rejection for a pending inspection whose AI verdict is FAIL', async () => {
+  const pendingDetail = {
+    inspection_id: 'inspection-pending', equipment_id: 'RPI4-001', primary_verdict: 'FAIL',
+    final_status: 'PENDING_REVIEW', inspected_at: '2026-11-25T13:49:28+09:00', images: [], audit_logs: [],
+  } as InspectionDetail
+  vi.mocked(adminApi.detail).mockResolvedValue(pendingDetail)
+
+  render(<MemoryRouter initialEntries={['/admin/inspections/inspection-pending']}><Routes><Route path="/admin/inspections/:inspectionId" element={<LiveInspectionDetail />} /></Routes></MemoryRouter>)
+
+  expect(await screen.findByRole('button', { name: '반려' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: '승인' })).toHaveAttribute('aria-pressed', 'false')
+})
+
 it('allows an admin to change PASS to a rejection using the retroactive API', async () => {
   const passDetail = {
     inspection_id: 'inspection-1', equipment_id: 'device-1', primary_verdict: 'PASS',
