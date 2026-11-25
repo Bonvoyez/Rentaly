@@ -1,0 +1,16 @@
+# Rentaly 백엔드 (FastAPI) 의존성
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+
+# DB 및 마이그레이션
+sqlalchemy>=2.0
+psycopg[binary]>=3.1
+psycopg2-binary>=2.9
+alembic>=1.13
+
+# 관리자 인증(JWT/Bcrypt) 및 스케줄러
+passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]>=3.3.0
+apscheduler>=3.10.4
