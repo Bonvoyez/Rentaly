@@ -36,8 +36,8 @@ from led_controller import get_led_controller
 
 app = Flask(__name__)
 
-BACKEND_URL = os.getenv("BACKEND_URL", "https://rentaly.duckdns.org/api/v1/inspections")
-DEVICE_SECRET = os.getenv("DEVICE_SECRET", "fdb58779be89e475c4b0447cb3e036dd")
+BACKEND_URL = os.getenv("BACKEND_URL", "")
+DEVICE_SECRET = os.getenv("DEVICE_SECRET", "")
 DEVICE_ID = os.getenv("DEVICE_ID", "station-01")
 
 BASE_DIR = os.path.join(os.path.dirname(__file__), "..")
@@ -668,6 +668,9 @@ HTML_TEMPLATE = """
 
 
 def _send_result_to_backend(insp_id, res_dict, img_bgr):
+    if not BACKEND_URL:
+        print("ℹ️ [Backend] BACKEND_URL 미설정 — 로컬 단독 모드로 동작하여 DB 전송을 건너뜁니다.")
+        return None
     metadata = {
         "device_id": DEVICE_ID,
         "inspection_id": insp_id,
@@ -992,10 +995,18 @@ def submit_to_backend():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Rentaly AI 외관 검사 & 엣지 서버")
+    parser.add_argument("--image", "-i", dest="image", help="카메라 대신 사용할 테스트 이미지 경로")
+    parser.add_argument("--port", "-p", type=int, default=8080, help="웹 서버 포트 (기본 8080)")
+    args = parser.parse_args()
+
     print("=" * 60)
     print("🚀 Rentaly AI 외관 검사 & 학습 데이터 스튜디오")
-    print("👉 대시보드 주소: http://100.93.132.9:8080")
+    print(f"👉 대시보드 주소: http://localhost:{args.port}")
+    if args.image:
+        print(f"🖼️ 테스트 이미지 모드: {args.image}")
     print("=" * 60)
-    get_camera_streamer()
-    get_auto_inspector() # MQTT 명령 수신기 및 루프 기동
-    app.run(host="0.0.0.0", port=8080, debug=False, threaded=True)
+    get_camera_streamer(test_image_path=args.image)
+    get_auto_inspector()  # MQTT 명령 수신기 및 루프 기동
+    app.run(host="0.0.0.0", port=args.port, debug=False, threaded=True)

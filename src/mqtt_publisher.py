@@ -22,8 +22,8 @@ try:
 except ImportError:
     HAS_PAHO = False
 
-MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "rentaly.duckdns.org")
-MQTT_PORT = int(os.getenv("MQTT_BROKER_PORT", "443"))
+MQTT_HOST = os.getenv("MQTT_BROKER_HOST", "localhost")
+MQTT_PORT = int(os.getenv("MQTT_BROKER_PORT", "1883"))
 DEVICE_ID = os.getenv("DEVICE_ID", "station-01")
 
 

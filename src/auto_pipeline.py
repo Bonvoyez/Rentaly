@@ -30,10 +30,20 @@ LABELS_DIR = os.path.join(DATASET_DIR, "labels")
 os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(LABELS_DIR, exist_ok=True)
 
-# FactChat Gateway API 정보
-GATEWAY_URL = os.getenv("FACTCHAT_GATEWAY_URL", "https://factchat-cloud.mindlogic.ai/v1/gateway/chat/completions")
-API_KEY = os.getenv("FACTCHAT_API_KEY", "cgpw7nTh9isIJH3o2BCrNkVpVzFGA7NU")
-MODEL_NAME = os.getenv("FACTCHAT_MODEL", "gemini-3.5-flash-lite")
+# 범용 OpenAI 호환 VLM API 설정
+GATEWAY_URL = (
+    os.getenv("LLM_BASE_URL")
+    or os.getenv("OPENAI_BASE_URL")
+    or os.getenv("FACTCHAT_GATEWAY_URL")
+    or "https://api.openai.com/v1/chat/completions"
+)
+API_KEY = (
+    os.getenv("LLM_API_KEY")
+    or os.getenv("OPENAI_API_KEY")
+    or os.getenv("FACTCHAT_API_KEY")
+    or ""
+)
+MODEL_NAME = os.getenv("LLM_MODEL") or os.getenv("FACTCHAT_MODEL") or "gpt-4o-mini"
 
 CLASSES = ["rpi4_board", "pwr_led_on", "human_hand", "defect"]
 

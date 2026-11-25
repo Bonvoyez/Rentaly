@@ -36,10 +36,19 @@ def _load_env_file():
 
 _load_env_file()
 
-# FactChat Gateway 설정 (환경변수에서 우선 로드)
-FACTCHAT_URL = os.getenv("LLM_BASE_URL", "https://factchat-cloud.mindlogic.ai/v1/gateway/chat/completions")
-FACTCHAT_API_KEY = os.getenv("LLM_API_KEY", "")
-FACTCHAT_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
+# 범용 OpenAI 호환 VLM API 설정 (OpenAI, Gemini, Ollama, vLLM, FactChat 등 모두 지원)
+LLM_BASE_URL = (
+    os.getenv("LLM_BASE_URL")
+    or os.getenv("OPENAI_BASE_URL")
+    or "https://api.openai.com/v1/chat/completions"
+)
+LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+LLM_MODEL = os.getenv("LLM_MODEL") or "gpt-4o-mini"
+
+# 하위 호환 별칭
+FACTCHAT_URL = LLM_BASE_URL
+FACTCHAT_API_KEY = LLM_API_KEY
+FACTCHAT_MODEL = LLM_MODEL
 
 BLUR_THRESHOLD = 80.0  # 선명도 기준치
 
@@ -197,14 +206,21 @@ def inspect_with_vlm(img_bgr):
         }
 
 if __name__ == "__main__":
-    test_img_path = sys.argv[1] if len(sys.argv) > 1 else "sample_data/live_capture.jpg"
+    import argparse
+    parser = argparse.ArgumentParser(description="Rentaly VLM 단일 이미지 검사 테스트")
+    parser.add_argument("pos_image", nargs="?", help="검사할 이미지 경로")
+    parser.add_argument("--image", "-i", dest="opt_image", help="검사할 이미지 경로 (--image)")
+    args = parser.parse_args()
+
+    default_sample = os.path.join(os.path.dirname(__file__), "..", "sample_data", "training", "IMG_8187.png")
+    test_img_path = args.opt_image or args.pos_image or default_sample
     print(f"[*] 테스트 대상 이미지: {test_img_path}")
     img = cv2.imread(test_img_path)
     if img is None:
         print("❌ 이미지 로드 실패")
         sys.exit(1)
 
-    print("[*] VLM 정밀 검사 실행 중...")
+    print(f"[*] VLM 정밀 검사 실행 중... (Endpoint: {LLM_BASE_URL}, Model: {LLM_MODEL})")
     res = inspect_with_vlm(img)
     print("\n" + "=" * 50)
     print("📊 [검사 결과 요약]")

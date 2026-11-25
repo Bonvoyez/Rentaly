@@ -110,7 +110,7 @@ export function KioskPage() {
         setStartError("검사를 시작하지 못했습니다. 다시 시도해 주세요.");
         return;
       }
-      setView(current => current === "ready" ? "ocr" : current);
+      setView(current => (current === "ready" || current === "reposition") ? "ocr" : current);
     } catch {
       setStartError("검사를 시작하지 못했습니다. 다시 시도해 주세요.");
     } finally {
@@ -200,7 +200,18 @@ export function KioskPage() {
             <span className="absolute left-11 top-[365px] text-xs font-medium text-amber-700">
               재시도 횟수&nbsp; {telemetry?.stage === "REPOSITION" ? telemetry.repositionCount : 1} / 3
             </span>
-            {button("다시 검사")}
+            <Button
+              size="kiosk"
+              className="absolute bottom-10 right-12"
+              disabled={starting}
+              onClick={() => {
+                setCaptureImageUrl(null);
+                setTelemetry(null);
+                void startInspection();
+              }}
+            >
+              다시 검사
+            </Button>
           </>
         );
       case "fail":
@@ -277,12 +288,10 @@ function ReadyCameraPreview() {
     </div>
   );
 }
-const CANDIDATE_FEEDS = [
-  import.meta.env.VITE_CAMERA_FEED_URL,
-  "https://thing-vintage-excerpt-exists.trycloudflare.com/video_feed",
-  "https://rebates-chosen-cellular-linking.trycloudflare.com/video_feed",
-  "https://arab-sunrise-therapeutic-jackie.trycloudflare.com/video_feed",
-].filter(Boolean) as string[];
+const CANDIDATE_FEEDS = (import.meta.env.VITE_CAMERA_FEED_URL ?? "")
+  .split(",")
+  .map((url: string) => url.trim())
+  .filter(Boolean);
 
 function CameraImage({
   imageUrl,

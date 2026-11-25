@@ -10,6 +10,7 @@
 =============================================================================
 """
 
+import os
 import time
 import threading
 import cv2
@@ -23,7 +24,7 @@ except ImportError:
 
 
 class CameraStreamer:
-    def __init__(self, width=640, height=480, fps=20):
+    def __init__(self, width=640, height=480, fps=20, test_image_path=None):
         self.width = width
         self.height = height
         self.fps = fps
@@ -33,9 +34,41 @@ class CameraStreamer:
         self.latest_frame_bgr = None
         self.latest_jpeg = None
         self.thread = None
+        self.test_image_path = test_image_path or os.getenv("TEST_IMAGE_PATH", "")
 
-        if HAS_PICAM2:
+        if self.test_image_path:
+            self._init_test_image(self.test_image_path)
+        elif HAS_PICAM2:
             self._init_camera()
+        else:
+            self._init_fallback_sample()
+
+    def _init_test_image(self, image_path):
+        """테스트용 단일 이미지 파일을 가상 카메라 스트림으로 로드"""
+        if not os.path.exists(image_path):
+            print(f"⚠️ [CameraStreamer] 테스트 이미지를 찾을 수 없습니다: {image_path}")
+            return False
+        bgr = cv2.imread(image_path)
+        if bgr is None:
+            print(f"⚠️ [CameraStreamer] 이미지 디코딩 실패: {image_path}")
+            return False
+        _, jpeg = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        with self.lock:
+            self.latest_frame_bgr = bgr
+            self.latest_jpeg = jpeg.tobytes()
+        self.running = True
+        print(f"🖼️ [CameraStreamer] 테스트 이미지 가상 스트림 활성화: {image_path}")
+        return True
+
+    def _init_fallback_sample(self):
+        """Picamera2 미지원 환경(Mac/PC)에서 sample_data 첫 번째 이미지를 자동 로드"""
+        sample_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "sample_data", "training"))
+        if os.path.isdir(sample_dir):
+            for fname in sorted(os.listdir(sample_dir)):
+                if fname.lower().endswith((".png", ".jpg", ".jpeg")):
+                    if self._init_test_image(os.path.join(sample_dir, fname)):
+                        return
+        print("ℹ️ [CameraStreamer] 카메라 및 샘플 이미지 없음 (대기 상태)")
 
     def _init_camera(self):
         try:
@@ -109,8 +142,10 @@ class CameraStreamer:
 # 싱글톤
 _streamer_instance = None
 
-def get_camera_streamer():
+def get_camera_streamer(test_image_path=None):
     global _streamer_instance
     if _streamer_instance is None:
-        _streamer_instance = CameraStreamer()
+        _streamer_instance = CameraStreamer(test_image_path=test_image_path)
+    elif test_image_path:
+        _streamer_instance._init_test_image(test_image_path)
     return _streamer_instance
