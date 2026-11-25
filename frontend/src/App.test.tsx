@@ -3,12 +3,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ThemeProvider } from './components/ThemeProvider'
 import type { Telemetry } from './domain/inspection'
+import type { TelemetryConnection } from './services/telemetry'
 
 let emitTelemetry: ((telemetry: Telemetry) => void) | undefined
+let emitConnection: ((connection: TelemetryConnection) => void) | undefined
 
 vi.mock('./services/telemetry', () => ({
-  subscribeToTelemetry: (_brokerUrl: string, _deviceId: string, onTelemetry: (telemetry: Telemetry) => void) => {
+  subscribeToTelemetry: (_brokerUrl: string, _deviceId: string, onTelemetry: (telemetry: Telemetry) => void, onConnection: (connection: TelemetryConnection) => void) => {
     emitTelemetry = onTelemetry
+    emitConnection = onConnection
     return () => undefined
   },
 }))
@@ -21,6 +24,7 @@ function renderApp() {
 afterEach(() => {
   cleanup()
   emitTelemetry = undefined
+  emitConnection = undefined
   vi.unstubAllEnvs()
 })
 
@@ -137,5 +141,23 @@ describe('Rentaly routes', () => {
 
     // Then
     expect(screen.getByRole('img', { name: '검사대에서 촬영한 Raspberry Pi 보드' })).toHaveAttribute('src', captureImageUrl)
+  })
+
+  it('keeps a received inspection visible without calling a dropped MQTT connection demo mode', () => {
+    vi.stubEnv('VITE_APP_MODE', 'kiosk')
+    vi.stubEnv('VITE_MQTT_BROKER_URL', 'wss://rentaly.duckdns.org/mqtt')
+    window.history.replaceState({}, '', '/kiosk')
+    renderApp()
+
+    act(() => emitConnection?.('connected'))
+    act(() => emitTelemetry?.({
+      inspectionId: 'inspection-1', deviceId: 'station-01', stage: 'AI_INFERENCE',
+      progressPercent: 86, blurScore: 180, stabilizationMs: 300, message: '외관 검사 중',
+    }))
+    act(() => emitConnection?.('disconnected'))
+
+    expect(screen.getByText('연결 끊김')).toBeVisible()
+    expect(screen.queryByText('데모 모드')).not.toBeInTheDocument()
+    expect(screen.getByText('86%')).toBeVisible()
   })
 })

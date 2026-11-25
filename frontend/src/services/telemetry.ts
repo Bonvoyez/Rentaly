@@ -73,7 +73,14 @@ export function subscribeToTelemetry(brokerUrl: string, deviceId: string, onTele
   client.on('offline', () => onConnection('disconnected'))
   client.on('error', () => onConnection('error'))
   client.on('message', (_topic, payload) => {
-    try { onTelemetry(parseTelemetry(payload)) } catch (error: unknown) { if (error instanceof Error) onConnection('error'); else throw error }
+    let telemetry: Telemetry
+    try { telemetry = parseTelemetry(payload) }
+    catch (error: unknown) {
+      if (!(error instanceof Error)) throw error
+      console.warn('Ignoring invalid MQTT telemetry message', error)
+      return
+    }
+    onTelemetry(telemetry)
   })
   return () => client.end(true)
 }
