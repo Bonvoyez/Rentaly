@@ -5,24 +5,24 @@ import { useTheme } from './theme-context'
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & { readonly tone?: 'primary' | 'secondary'; readonly size?: 'admin' | 'kiosk' }
 
 export function Button({ tone = 'primary', size = 'admin', className = '', ...props }: ButtonProps) {
-  const toneClass = tone === 'primary' ? 'border-transparent bg-primary text-white hover:bg-primary-hover' : 'border-line-soft bg-white text-ink hover:bg-slate-50 dark:border-[#334155] dark:bg-[#182231] dark:text-slate-100 dark:hover:bg-[#202d3d]'
+  const toneClass = tone === 'primary' ? 'border-transparent bg-primary text-white hover:bg-primary-hover' : 'border-line-soft bg-white text-ink hover:bg-slate-50 dark:border-dark-control dark:bg-dark-raised dark:text-dark-ink dark:hover:bg-dark-hover'
   const sizeClass = size === 'kiosk' ? 'min-h-14 w-60 rounded-[14px] text-base' : 'min-h-10 px-6'
-  return <button className={`cursor-pointer rounded-xl border font-bold transition-colors disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-slate-700 ${toneClass} ${sizeClass} ${className}`} {...props} />
+  return <button className={`cursor-pointer rounded-xl border font-bold transition-colors disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 dark:disabled:bg-dark-line dark:disabled:text-dark-secondary ${toneClass} ${sizeClass} ${className}`} {...props} />
 }
 
 export type StatusTone = 'success' | 'warning' | 'error' | 'neutral'
 const badgeClasses: Readonly<Record<StatusTone, string>> = {
-  success: 'bg-success-soft text-success dark:bg-emerald-500/15 dark:text-emerald-300', warning: 'bg-warning-soft text-warning dark:bg-amber-500/15 dark:text-amber-300', error: 'bg-danger-soft text-danger dark:bg-rose-500/15 dark:text-rose-300', neutral: 'bg-slate-100 text-secondary dark:bg-slate-700 dark:text-slate-200',
+  success: 'bg-success-soft text-success dark:bg-emerald-400/12 dark:text-emerald-300', warning: 'bg-warning-soft text-warning dark:bg-amber-400/12 dark:text-amber-300', error: 'bg-danger-soft text-danger dark:bg-rose-400/12 dark:text-rose-300', neutral: 'bg-slate-100 text-secondary dark:bg-dark-hover dark:text-dark-secondary',
 }
 
 export function StatusBadge({ tone, children }: { readonly tone: StatusTone; readonly children: ReactNode }) {
   return <span className={`inline-flex h-7 min-w-[106px] items-center justify-center rounded-full px-3 text-xs font-semibold ${badgeClasses[tone]}`}>{children}</span>
 }
 
-export function ThemeToggle({ compact = false }: { readonly compact?: boolean }) {
+export function ThemeToggle({ compact = false, className = '' }: { readonly compact?: boolean; readonly className?: string }) {
   const { theme, toggleTheme } = useTheme()
   const dark = theme === 'dark'
-  return <button type="button" onClick={toggleTheme} aria-label={dark ? '라이트 모드로 전환' : '다크 모드로 전환'} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-line-soft bg-white px-3 text-xs font-semibold text-secondary hover:bg-slate-50 dark:border-[#334155] dark:bg-[#182231] dark:text-slate-200 dark:hover:bg-[#202d3d]">{dark ? <Sun className="size-4" /> : <Moon className="size-4" />}{compact ? null : dark ? '라이트' : '다크'}</button>
+  return <button type="button" onClick={toggleTheme} aria-label={dark ? '라이트 모드로 전환' : '다크 모드로 전환'} className={`inline-flex min-h-10 items-center gap-2 rounded-xl border border-line-soft bg-white px-3 text-xs font-semibold text-secondary hover:bg-slate-50 dark:border-dark-control dark:bg-dark-raised dark:text-dark-secondary dark:hover:bg-dark-hover ${className}`}>{dark ? <Sun className="size-4" /> : <Moon className="size-4" />}{compact ? null : dark ? '라이트' : '다크'}</button>
 }
 
 export function SystemStatus({ connected = true, label }: { readonly connected?: boolean; readonly label?: string }) {
@@ -35,7 +35,7 @@ export function ProgressBar({ value, label }: { readonly value: number; readonly
 
 export type CheckTone = 'success' | 'active' | 'warning' | 'error' | 'muted'
 const checkClasses: Readonly<Record<CheckTone, string>> = {
-  success: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300', active: 'border-line-soft bg-white text-ink dark:border-[#334155] dark:bg-[#182231] dark:text-slate-100', warning: 'border-warning bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300', error: 'border-danger bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300', muted: 'border-line-soft bg-white text-muted dark:border-[#334155] dark:bg-[#121a26] dark:text-slate-400',
+  success: 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-500/35 dark:bg-emerald-400/10 dark:text-emerald-300', active: 'border-line-soft bg-white text-ink dark:border-dark-control dark:bg-dark-surface dark:text-dark-ink', warning: 'border-warning bg-amber-50 text-amber-700 dark:border-amber-500/35 dark:bg-amber-400/10 dark:text-amber-300', error: 'border-danger bg-rose-50 text-rose-700 dark:border-rose-500/35 dark:bg-rose-400/10 dark:text-rose-300', muted: 'border-line-soft bg-white text-muted dark:border-dark-line dark:bg-dark-surface dark:text-dark-secondary',
 }
 
 export function InspectionCheck({ label, state, tone, compact = false }: { readonly label: string; readonly state: string; readonly tone: CheckTone; readonly compact?: boolean }) {

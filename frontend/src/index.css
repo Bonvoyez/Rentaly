@@ -19,13 +19,36 @@
   --color-warning-soft: #fff7e5;
   --color-danger: #f04452;
   --color-danger-soft: #fff0f2;
+  --color-dark-canvas: #17181c;
+  --color-dark-sidebar: #1b1c21;
+  --color-dark-surface: #202127;
+  --color-dark-raised: #292b31;
+  --color-dark-hover: #30333b;
+  --color-dark-selected: #2a344a;
+  --color-dark-line: #3b3d46;
+  --color-dark-control: #4a4d57;
+  --color-dark-ink: #f1f2f4;
+  --color-dark-secondary: #b4b7c1;
+  --color-dark-accent: #adc3ff;
 }
 
 @layer base {
   :root { color-scheme: light; }
-  :root.dark { color-scheme: dark; }
+  :root.dark {
+    color-scheme: dark;
+    --color-ink: var(--color-dark-ink);
+    --color-secondary: var(--color-dark-secondary);
+    --color-muted: #969aa6;
+    --color-line: var(--color-dark-line);
+    --color-line-soft: var(--color-dark-line);
+    --color-canvas: var(--color-dark-canvas);
+    --color-primary-soft: var(--color-dark-selected);
+    --color-success-soft: #20372f;
+    --color-warning-soft: #3b3220;
+    --color-danger-soft: #3c262b;
+  }
   html, body, #root { min-width: 100%; min-height: 100%; margin: 0; }
-  body { min-height: 100dvh; @apply bg-canvas font-sans text-ink antialiased dark:bg-[#0b1018] dark:text-[#f5f7fa]; }
+  body { min-height: 100dvh; @apply bg-canvas font-sans text-ink antialiased dark:bg-dark-canvas dark:text-dark-ink; }
   button, a, input, textarea, select { @apply focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary; }
   button, a { -webkit-tap-highlight-color: transparent; }
 }
