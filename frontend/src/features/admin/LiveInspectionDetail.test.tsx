@@ -19,8 +19,8 @@ it('selects rejection for a pending inspection whose AI verdict is FAIL', async 
 
   render(<MemoryRouter initialEntries={['/admin/inspections/inspection-pending']}><Routes><Route path="/admin/inspections/:inspectionId" element={<LiveInspectionDetail />} /></Routes></MemoryRouter>)
 
-  expect(await screen.findByRole('button', { name: '반려' })).toHaveAttribute('aria-pressed', 'true')
-  expect(screen.getByRole('button', { name: '승인' })).toHaveAttribute('aria-pressed', 'false')
+  expect(await screen.findByRole('button', { name: 'Reject' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: 'Approve' })).toHaveAttribute('aria-pressed', 'false')
 })
 
 it('allows an admin to change PASS to a rejection using the retroactive API', async () => {
@@ -33,20 +33,20 @@ it('allows an admin to change PASS to a rejection using the retroactive API', as
 
   render(<MemoryRouter initialEntries={['/admin/inspections/inspection-1']}><Routes><Route path="/admin/inspections/:inspectionId" element={<LiveInspectionDetail />} /></Routes></MemoryRouter>)
 
-  const reject = await screen.findByRole('button', { name: '반려' })
+  const reject = await screen.findByRole('button', { name: 'Reject' })
   expect(reject).toBeEnabled()
-  expect(screen.getByRole('button', { name: '판정 수정' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Update Verdict' })).toBeEnabled()
   fireEvent.click(reject)
-  fireEvent.click(screen.getByRole('button', { name: '판정 수정' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Update Verdict' }))
   expect(screen.getByRole('alert')).toBeVisible()
   expect(adminApi.retroactiveReject).not.toHaveBeenCalled()
-  const memo = screen.getByPlaceholderText('수정하려면 사유를 입력해주세요')
+  const memo = screen.getByPlaceholderText('Enter a reason to update')
   expect(memo).toBeRequired()
-  fireEvent.change(memo, { target: { value: '외관 결함 확인' } })
-  fireEvent.click(screen.getByRole('button', { name: '판정 수정' }))
-  fireEvent.click(screen.getByRole('button', { name: '확정' }))
+  fireEvent.change(memo, { target: { value: 'Exterior defect confirmed' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Update Verdict' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
 
-  await waitFor(() => expect(adminApi.retroactiveReject).toHaveBeenCalledWith('inspection-1', '외관 결함 확인'))
+  await waitFor(() => expect(adminApi.retroactiveReject).toHaveBeenCalledWith('inspection-1', 'Exterior defect confirmed'))
   expect(adminApi.confirm).not.toHaveBeenCalled()
 })
 
@@ -60,12 +60,12 @@ it('requires a memo when changing a saved rejection to approval', async () => {
 
   render(<MemoryRouter initialEntries={['/admin/inspections/inspection-2']}><Routes><Route path="/admin/inspections/:inspectionId" element={<LiveInspectionDetail />} /></Routes></MemoryRouter>)
 
-  fireEvent.click(await screen.findByRole('button', { name: '승인' }))
-  const memo = screen.getByPlaceholderText('수정하려면 사유를 입력해주세요')
+  fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+  const memo = screen.getByPlaceholderText('Enter a reason to update')
   expect(memo).toBeRequired()
-  fireEvent.change(memo, { target: { value: '재검토 결과 정상' } })
-  fireEvent.click(screen.getByRole('button', { name: '판정 수정' }))
-  fireEvent.click(screen.getByRole('button', { name: '확정' }))
+  fireEvent.change(memo, { target: { value: 'Normal upon re-review' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Update Verdict' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
 
-  await waitFor(() => expect(adminApi.confirm).toHaveBeenCalledWith('inspection-2', 'CONFIRMED_PASS', '재검토 결과 정상'))
+  await waitFor(() => expect(adminApi.confirm).toHaveBeenCalledWith('inspection-2', 'CONFIRMED_PASS', 'Normal upon re-review'))
 })

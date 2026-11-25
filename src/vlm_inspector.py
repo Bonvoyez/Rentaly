@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 =============================================================================
-[VLM Inspector] FactChat Gateway API 기반 엣지 최적화 정밀 외관/텍스트 검사 모듈
+[VLM Inspector] FactChat Gateway API-Based Edge-Optimized Precision Exterior/Text Inspection Module
 =============================================================================
-- 모델: gemini-3.5-flash-lite (FactChat Gateway)
-- 최적화:
-    1) Fail-Safe: 라플라시안 블러 점수 계측 (선명도 미달 시 API 호출 생략)
-    2) 스마트 리사이즈: 텍스트 보존 & 1024px JPEG 압축 (네트워크 트래픽 95% 절감)
-    3) Strict JSON 스키마: 외관 결함, FCC ID, 전원 LED, 모델명을 1회 호출로 추출
+- Model: gemini-3.5-flash-lite (FactChat Gateway)
+- Optimizations:
+    1) Fail-Safe: Laplacian blur score measurement (skips API call if below threshold)
+    2) Smart Resize: Preserves text readability & 1024px JPEG compression (95% network traffic reduction)
+    3) Strict JSON Schema: Extracts exterior defects, FCC ID, power LED, and model name in 1 call
 =============================================================================
 """
 
@@ -22,7 +22,7 @@ import urllib.error
 import cv2
 import numpy as np
 
-# .env 자동 로드 (보안 키 격리)
+# Auto-load .env (secure key isolation)
 def _load_env_file():
     env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
     if os.path.exists(env_path):
@@ -36,7 +36,7 @@ def _load_env_file():
 
 _load_env_file()
 
-# 범용 OpenAI 호환 VLM API 설정 (OpenAI, Gemini, Ollama, vLLM, FactChat 등 모두 지원)
+# Universal OpenAI-compatible VLM API config (supports OpenAI, Gemini, Ollama, vLLM, FactChat, etc.)
 LLM_BASE_URL = (
     os.getenv("LLM_BASE_URL")
     or os.getenv("OPENAI_BASE_URL")
@@ -45,12 +45,12 @@ LLM_BASE_URL = (
 LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
 LLM_MODEL = os.getenv("LLM_MODEL") or "gpt-4o-mini"
 
-# 하위 호환 별칭
+# Backward compatibility aliases
 FACTCHAT_URL = LLM_BASE_URL
 FACTCHAT_API_KEY = LLM_API_KEY
 FACTCHAT_MODEL = LLM_MODEL
 
-BLUR_THRESHOLD = 80.0  # 선명도 기준치
+BLUR_THRESHOLD = 80.0  # Sharpness threshold
 
 SYSTEM_PROMPT = """You are an industrial QA vision inspector for a Raspberry Pi 4 Model B return kiosk ('Rentaly').
 Inspect the board image and return ONLY a strict JSON object with these keys:
@@ -65,18 +65,18 @@ Inspect the board image and return ONLY a strict JSON object with these keys:
   "device_unique_id": "extracted asset sticker / serial number / barcode text / MAC address or empty",
   "model_text": "Raspberry Pi 4 Model B or similar extracted text",
   "confidence": 0.0 to 1.0,
-  "reason": "Clear explanation in Korean why PASS, FAIL, or REPOSITION (explicitly mention if board is cut off, pen markings, chip defect, etc.)"
+  "reason": "Clear explanation in English why PASS, FAIL, or REPOSITION (explicitly mention if board is cut off, pen markings, chip defect, etc.)"
 }
 Strict Verification Rules:
-1. [Human Hand / Obstacle Occlusion Rule]: If a human hand, fingers, skin, or any foreign holding object (or loose ribbon cable laying across core components) is touching or covering the board, or visible in the frame handling the board, you MUST IMMEDIATELY set is_fully_visible=false, primary_verdict="REPOSITION", defect_type="FOREIGN_SUBSTANCE_OR_DRAWING", and reason="손이나 이물질이 감지되었습니다. 손을 완전히 떼고 보드만 놓아주세요." NEVER pass an image where human fingers or hands are visible!
-2. [Boundary & Cut-off Rule]: If the Raspberry Pi board is cut off, cropped, or any of its 4 edges are outside the image frame, you MUST set is_fully_visible=false, primary_verdict="REPOSITION", defect_type="CROPPED_OR_CUT_OFF", and reason="보드가 화면 밖으로 잘려 있습니다. 보드 전체가 화면 중앙에 들어오도록 재배치해주세요."
+1. [Human Hand / Obstacle Occlusion Rule]: If a human hand, fingers, skin, or any foreign holding object (or loose ribbon cable laying across core components) is touching or covering the board, or visible in the frame handling the board, you MUST IMMEDIATELY set is_fully_visible=false, primary_verdict="REPOSITION", defect_type="FOREIGN_SUBSTANCE_OR_DRAWING", and reason="Hand or foreign object detected. Please remove your hand completely and leave only the board." NEVER pass an image where human fingers or hands are visible!
+2. [Boundary & Cut-off Rule]: If the Raspberry Pi board is cut off, cropped, or any of its 4 edges are outside the image frame, you MUST set is_fully_visible=false, primary_verdict="REPOSITION", defect_type="CROPPED_OR_CUT_OFF", and reason="Board is cut off outside the frame. Please reposition so the entire board is centered."
 3. [Power LED (PWR LED) Verification Rule - MANDATORY]:
    - Locate the PWR LED near the USB-C power input (top-right corner of the board).
    - CAMERA FILTER NOTE: Due to infrared (IR) / camera optical filters, the illuminated LED may appear as a bright PURPLE, PINK, RED, or intense glowing WHITE light spot/glare rather than pure red.
    - [LED ON condition]: If there is an active, bright illuminating point of light (glowing dot, light spread, or glare in red/pink/purple/white) at the PWR LED position, set pwr_led_status=true.
-   - [LED OFF condition]: If there is NO light emission, NO glowing dot, and only the dark unlit physical SMD component is visible (or USB-C power disconnected), you MUST set pwr_led_status=false, primary_verdict="FAIL", defect_type="PORT_DAMAGE", and reason="전원 PWR LED가 꺼져 있습니다. 전원 공급 및 보드 상태를 확인해 주세요."
+   - [LED OFF condition]: If there is NO light emission, NO glowing dot, and only the dark unlit physical SMD component is visible (or USB-C power disconnected), you MUST set pwr_led_status=false, primary_verdict="FAIL", defect_type="PORT_DAMAGE", and reason="Power PWR LED is off. Please check power supply and board status."
    - If pwr_led_status is false, NEVER set primary_verdict="PASS"! Output primary_verdict="FAIL".
-4. [Asset Tag & Sticker Exception]: Asset management tags, post-it notes, barcode stickers, or label stickers (e.g., 'RPI4-01' on LAN/USB port) attached for inventory tracking are STRICTLY PERMITTED and are NOT defects! Read the text on this label and put it into 'device_unique_id'.
+4. [Asset Tag & Unique ID Verification - MANDATORY]: Asset management tags or label stickers (e.g., 'RPI4-01' on LAN/USB port) attached for inventory tracking are REQUIRED to identify the returned device. Read the text on this label into 'device_unique_id'. If NO asset sticker/unique ID label is visible on the board/ports (device_unique_id is empty), you MUST set primary_verdict="FAIL", defect_type="MISSING_PARTS", and reason="Unique ID (asset management sticker) is not visible."
 5. [Port Marker Markings]: Minor identification pen marks (like 'AvA') on metal shielding/port surfaces are acceptable management markings and should NOT fail the board unless the green PCB circuit or silicon chips themselves are vandalized.
 6. [True Defect Rule]: If someone drew, colored, scratched, or spilled foreign substances directly on the GREEN PCB BOARD TRACES or SILICON CHIPS (CPU, RAM, PMIC), or if pins are bent/chips cracked, you MUST set primary_verdict="FAIL", defect_type="FOREIGN_SUBSTANCE_OR_DRAWING".
 7. [Identifier Extraction]: Carefully read the silkscreen for IC: 20953-RPI4B, FCC ID: 2ABCB-RPI4B, and extract asset label text into device_unique_id.
@@ -84,21 +84,21 @@ Strict Verification Rules:
    - NO human hands/fingers in frame
    - Board fully visible and flat
    - pwr_led_status is TRUE (solid red PWR LED glowing)
-   - Legitimate asset tags present without PCB/chip damage or bent pins.
+   - Asset sticker (device_unique_id) is clearly present without PCB/chip damage.
    If pwr_led_status is FALSE, NEVER set primary_verdict="PASS"! Output primary_verdict="FAIL".
 Output ONLY the JSON object. No markdown backticks, no other text."""
 
 
 def calculate_blur_score(img_bgr):
-    """라플라시안 분산 기반 선명도 점수 계측"""
+    """Measure sharpness score based on Laplacian variance"""
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY) if len(img_bgr.shape) == 3 else img_bgr
     return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
 
 def optimize_image_for_vlm(img_bgr, max_dim=1024, quality=85):
     """
-    [엣지 최적화 2단계: 스마트 리사이징 및 압축]
-    텍스트/패턴 가독성을 보존하면서 전송 크기를 200KB 이내로 최적화합니다.
+    [Edge Optimization Stage 2: Smart Resizing & Compression]
+    Optimizes transfer size within 200KB while preserving text/pattern readability.
     """
     h, w = img_bgr.shape[:2]
     if max(h, w) > max_dim:
@@ -111,7 +111,7 @@ def optimize_image_for_vlm(img_bgr, max_dim=1024, quality=85):
     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
     success, encimg = cv2.imencode(".jpg", resized, encode_param)
     if not success:
-        raise ValueError("JPEG 인코딩 실패")
+        raise ValueError("JPEG encoding failed")
 
     b64_str = base64.b64encode(encimg).decode("utf-8")
     return b64_str, resized
@@ -119,11 +119,11 @@ def optimize_image_for_vlm(img_bgr, max_dim=1024, quality=85):
 
 def inspect_with_vlm(img_bgr):
     """
-    최적화된 VLM 정밀 검사 파이프라인
+    Optimized VLM precision inspection pipeline
     """
     start_time = time.perf_counter()
 
-    # 1. Fail-Safe 1차 방어선: 블러 계측
+    # 1. Fail-Safe 1st line of defense: blur measurement
     blur_score = calculate_blur_score(img_bgr)
     if blur_score < BLUR_THRESHOLD:
         infer_ms = (time.perf_counter() - start_time) * 1000.0
@@ -137,14 +137,14 @@ def inspect_with_vlm(img_bgr):
             "fcc_id_text": "",
             "model_text": "",
             "confidence": 0.0,
-            "reason": f"카메라 초점 흐림 또는 흔들림 감지 (선명도: {blur_score:.1f} < 기준: {BLUR_THRESHOLD:.0f})",
+            "reason": f"Camera out of focus or motion blur detected (sharpness: {blur_score:.1f} < threshold: {BLUR_THRESHOLD:.0f})",
             "infer_ms": round(infer_ms, 1)
         }
 
-    # 2. 이미지 스마트 리사이즈 & 인코딩
+    # 2. Smart image resize & encoding
     img_b64, opt_img = optimize_image_for_vlm(img_bgr)
 
-    # 3. FactChat Gateway VLM 호출
+    # 3. Call FactChat Gateway VLM
     payload = {
         "model": FACTCHAT_MODEL,
         "messages": [
@@ -174,7 +174,7 @@ def inspect_with_vlm(img_bgr):
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             content = data["choices"][0]["message"]["content"].strip()
-            # 마크다운 코드블록 제거
+            # Strip markdown code blocks
             if content.startswith("```"):
                 lines = content.splitlines()
                 if lines[0].startswith("```"):
@@ -201,29 +201,29 @@ def inspect_with_vlm(img_bgr):
             "fcc_id_text": "",
             "model_text": "",
             "confidence": 0.0,
-            "reason": f"VLM API 호출 오류: {str(e)}",
+            "reason": f"VLM API call error: {str(e)}",
             "infer_ms": round(infer_ms, 1)
         }
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description="Rentaly VLM 단일 이미지 검사 테스트")
-    parser.add_argument("pos_image", nargs="?", help="검사할 이미지 경로")
-    parser.add_argument("--image", "-i", dest="opt_image", help="검사할 이미지 경로 (--image)")
+    parser = argparse.ArgumentParser(description="Rentaly VLM Single Image Inspection Test")
+    parser.add_argument("pos_image", nargs="?", help="Path to image to inspect")
+    parser.add_argument("--image", "-i", dest="opt_image", help="Path to image to inspect (--image)")
     args = parser.parse_args()
 
     default_sample = os.path.join(os.path.dirname(__file__), "..", "sample_data", "training", "IMG_8187.png")
     test_img_path = args.opt_image or args.pos_image or default_sample
-    print(f"[*] 테스트 대상 이미지: {test_img_path}")
+    print(f"[*] Target test image: {test_img_path}")
     img = cv2.imread(test_img_path)
     if img is None:
-        print("❌ 이미지 로드 실패")
+        print("❌ Failed to load image")
         sys.exit(1)
 
-    print(f"[*] VLM 정밀 검사 실행 중... (Endpoint: {LLM_BASE_URL}, Model: {LLM_MODEL})")
+    print(f"[*] Running VLM precision inspection... (Endpoint: {LLM_BASE_URL}, Model: {LLM_MODEL})")
     res = inspect_with_vlm(img)
     print("\n" + "=" * 50)
-    print("📊 [검사 결과 요약]")
+    print("📊 [Inspection Result Summary]")
     print("=" * 50)
     for k, v in res.items():
         print(f"  - {k:18s}: {v}")

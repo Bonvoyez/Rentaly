@@ -11,32 +11,32 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.entities import AdminUser
 
-# 환경변수 설정 (운영 환경에서는 .env 파일 등으로 주입)
+# Environment variable configuration (inject via .env file, etc. in production)
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "super-secret-jwt-key-change-in-production")
 JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 120  # SAD 6.1절: 유효기간 2시간
+ACCESS_TOKEN_EXPIRE_MINUTES = 120  # SAD 6.1: 2-hour expiration
 
-# Bcrypt 비밀번호 해싱 컨텍스트 (자동 Salt 적용)
+# Bcrypt password hashing context (automatic salt)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Swagger UI에서 Bearer 토큰 입력을 지원하는 보안 스키마
+# Security scheme supporting Bearer token input in Swagger UI
 security_scheme = HTTPBearer()
 
 def hash_password(password: str) -> str:
-    """평문 비밀번호를 Salt가 적용된 Bcrypt 해시로 변환합니다."""
+    """Convert a plaintext password into a salted Bcrypt hash."""
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """입력된 비밀번호와 DB의 Bcrypt 해시값을 비교 검증합니다."""
+    """Verify a plaintext password against the stored Bcrypt hash in the DB."""
     return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(admin_id: str, account: str, expires_delta: Optional[timedelta] = None) -> str:
-    """유효기간 2시간과 ADMIN 역할(role)이 포함된 JWT Access Token을 생성합니다."""
+    """Create a JWT Access Token with a 2-hour expiration and ADMIN role."""
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode = {
         "sub": admin_id,
         "account": account,
-        "role": "ADMIN",  # RBAC 검증용 역할 명시
+        "role": "ADMIN",  # Explicit role for RBAC verification
         "exp": expire
     }
     return jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -46,21 +46,21 @@ def get_current_admin(
     db: Session = Depends(get_db)
 ) -> AdminUser:
     """
-    [RBAC 인가 미들웨어]
-    1. JWT 토큰 서명 및 만료 여부(HTTP 401) 검증
-    2. 토큰 내 ADMIN 역할(RBAC) 보유 여부(HTTP 403) 검증
-    3. DB 내 실제 관리자 존재 여부 확인
+    [RBAC Authorization Middleware]
+    1. Verify JWT token signature and expiration (HTTP 401)
+    2. Verify ADMIN role (RBAC) in token (HTTP 403)
+    3. Verify admin user exists in DB
     """
     token = credentials.credentials
     
     unauthorized_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail={"code": "INVALID_OR_EXPIRED_TOKEN", "message": "유효하지 않거나 만료된 토큰입니다. 재인증이 필요합니다."},
+        detail={"code": "INVALID_OR_EXPIRED_TOKEN", "message": "Invalid or expired token. Re-authentication is required."},
         headers={"WWW-Authenticate": "Bearer"},
     )
     forbidden_exception = HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail={"code": "INSUFFICIENT_PERMISSION", "message": "관리자(ADMIN) 권한이 없습니다."},
+        detail={"code": "INSUFFICIENT_PERMISSION", "message": "Administrator (ADMIN) permission is required."},
     )
 
     try:

@@ -12,4 +12,4 @@ def verify_device(x_device_secret: str | None = Header(None)):
     if not x_device_secret or not secrets.compare_digest(
         x_device_secret.encode(), DEVICE_SECRET.encode()
     ):
-        raise api_error(401, "INVALID_DEVICE_SECRET", "장비 인증에 실패했습니다.")
+        raise api_error(401, "INVALID_DEVICE_SECRET", "Device authentication failed.")

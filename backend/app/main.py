@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import Base, engine
-from app.models import entities  # 6개 테이블 모델 등록용
+from app.models import entities  # Register 6 table models
 from app.inspections import router as inspections_router
 from app.routers import admin_auth, admin_inspections
 from app.scheduler import start_scheduler
@@ -13,7 +13,7 @@ from app.scheduler import start_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 서버 시작 시 PostgreSQL에 6개 테이블이 없으면 자동 생성
+    # Automatically create the 6 tables in PostgreSQL on server startup if missing
     Base.metadata.create_all(bind=engine)
     start_scheduler()
     yield

@@ -24,7 +24,7 @@ export function AdminShell({ live = false }: { readonly live?: boolean }) {
         if (user.role === 'ADMIN') setAccount(user.account)
         else navigate('/admin/forbidden', { replace: true })
       }
-    }).catch(() => { if (active) setError('관리자 정보를 확인하지 못했습니다. 다시 로그인해 주세요.') })
+    }).catch(() => { if (active) setError('Could not verify administrator information. Please sign in again.') })
     return () => { active = false; window.removeEventListener('rentaly-session-expired', expire) }
   }, [live, navigate])
 
@@ -34,20 +34,20 @@ export function AdminShell({ live = false }: { readonly live?: boolean }) {
     <div className="mx-auto grid min-h-[calc(100dvh-1rem)] w-full max-w-[1440px] overflow-hidden rounded-[18px] border border-line bg-white sm:min-h-[calc(100dvh-2rem)] md:grid-cols-[220px_minmax(0,1fr)] dark:border-dark-line dark:bg-dark-surface">
       <aside className="grid grid-cols-2 gap-2 border-b border-line-soft bg-[#fbfcfd] p-3 sm:p-5 md:flex md:flex-col md:items-stretch md:gap-0 md:border-b-0 md:border-r dark:border-dark-line dark:bg-dark-sidebar">
         <div className="col-span-2 flex min-w-0 items-baseline justify-between gap-2 md:block">
-          <span className="shrink-0 text-lg font-bold text-primary dark:text-dark-accent">반납검사</span>
-          <span className="truncate text-right text-xs text-muted md:mb-8 md:mt-1 md:block md:text-left dark:text-dark-secondary">{live ? `${account ?? '관리자 확인 중…'} · 관리자` : 'admin0301 · Mock'}</span>
+          <span className="shrink-0 text-lg font-bold text-primary dark:text-dark-accent">Rentaly</span>
+          <span className="truncate text-right text-xs text-muted md:mb-8 md:mt-1 md:block md:text-left dark:text-dark-secondary">{live ? `${account ?? 'Verifying admin…'} · Admin` : 'admin0301 · Mock'}</span>
         </div>
-        <nav aria-label="관리자 메뉴" className="col-span-2 grid grid-cols-2 gap-2 md:grid-cols-1 md:gap-1">
-          <NavLink className={navClass} to="/admin/inspections"><ClipboardList className="size-4 shrink-0" />검사 이력</NavLink>
-          <NavLink className={navClass} to="/admin/devices"><MonitorCog className="size-4 shrink-0" />장비 관리</NavLink>
+        <nav aria-label="Admin menu" className="col-span-2 grid grid-cols-2 gap-2 md:grid-cols-1 md:gap-1">
+          <NavLink className={navClass} to="/admin/inspections"><ClipboardList className="size-4 shrink-0" />Inspection History</NavLink>
+          <NavLink className={navClass} to="/admin/devices"><MonitorCog className="size-4 shrink-0" />Device Management</NavLink>
         </nav>
         <div className="col-span-2 grid grid-cols-2 gap-2 md:mt-auto md:grid-cols-1 md:gap-1">
           <ThemeToggle className="w-full justify-center md:justify-start" />
-          <button type="button" onClick={() => { if (live) clearSession(); navigate('/admin/login') }} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-line-soft px-2 text-xs text-secondary hover:bg-slate-100 hover:text-danger md:justify-start md:border-transparent dark:border-dark-control dark:text-dark-secondary dark:hover:bg-dark-hover dark:hover:text-rose-300"><LogOut className="size-4" />로그아웃</button>
+          <button type="button" onClick={() => { if (live) clearSession(); navigate('/admin/login') }} className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-line-soft px-2 text-xs text-secondary hover:bg-slate-100 hover:text-danger md:justify-start md:border-transparent dark:border-dark-control dark:text-dark-secondary dark:hover:bg-dark-hover dark:hover:text-rose-300"><LogOut className="size-4" />Sign Out</button>
         </div>
       </aside>
       <main className="min-w-0 overflow-y-auto bg-white dark:bg-dark-surface">
-        {error ? <p role="alert" className="p-10 text-danger dark:text-rose-300">{error}</p> : live && !account ? <p role="status" className="p-10">관리자 확인 중…</p> : <Outlet />}
+        {error ? <p role="alert" className="p-10 text-danger dark:text-rose-300">{error}</p> : live && !account ? <p role="status" className="p-10">Verifying admin…</p> : <Outlet />}
       </main>
     </div>
   </div>

@@ -2,7 +2,7 @@ from enum import Enum
 
 
 class PrimaryVerdict(str, Enum):
-    """Edge(Raspberry Pi)에서 수행한 1차 판정 결과"""
+    """Primary verdict determined on the Edge (Raspberry Pi)"""
     PASS = "PASS"
     REPOSITION = "REPOSITION"
     FAIL = "FAIL"
@@ -10,7 +10,7 @@ class PrimaryVerdict(str, Enum):
 
 
 class FinalStatus(str, Enum):
-    """DB에 기록되는 최종 검사 상태"""
+    """Final inspection status recorded in the DB"""
     PASSED = "PASSED"
     REPOSITION_LOG = "REPOSITION_LOG"
     MANUAL_RETURN = "MANUAL_RETURN"
@@ -22,7 +22,7 @@ class FinalStatus(str, Enum):
 
 
 class AuditAction(str, Enum):
-    """관리자 감사 로그(AUDIT_LOG) 작업 유형"""
+    """Admin audit log (AUDIT_LOG) action types"""
     CONFIRM_PASS = "CONFIRM_PASS"
     CONFIRM_REJECT = "CONFIRM_REJECT"
     RETROACTIVE_REJECT = "RETROACTIVE_REJECT"

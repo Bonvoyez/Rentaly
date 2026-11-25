@@ -23,7 +23,7 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg"}
 
 
 def determine_final_status(primary_verdict: str, reposition_count: int = 0) -> str:
-    """1차 판정(primary_verdict)에 따른 초기 final_status 결정"""
+    """Determine initial final_status based on primary_verdict"""
     if primary_verdict == PrimaryVerdict.PASS.value:
         return FinalStatus.PASSED.value
     if primary_verdict == PrimaryVerdict.FAIL.value:
@@ -57,20 +57,20 @@ async def receive_inspection(
         except ValueError:
             header_id = None
         if header_id != meta.inspection_id:
-            raise api_error(400, "INSPECTION_ID_MISMATCH", "X-Inspection-ID와 metadata의 inspection_id가 다릅니다.")
+            raise api_error(400, "INSPECTION_ID_MISMATCH", "X-Inspection-ID does not match metadata.inspection_id.")
 
     if image.content_type not in ALLOWED_IMAGE_TYPES:
-        raise api_error(400, "INVALID_IMAGE", "jpg 이미지만 업로드할 수 있습니다.")
+        raise api_error(400, "INVALID_IMAGE", "Only jpg images can be uploaded.")
 
     content = await image.read()
     if not content:
-        raise api_error(400, "INVALID_IMAGE", "이미지가 비어 있습니다.")
+        raise api_error(400, "INVALID_IMAGE", "Image file is empty.")
     if len(content) > MAX_IMAGE_BYTES:
-        raise api_error(413, "IMAGE_TOO_LARGE", "이미지는 10MB 이하만 업로드할 수 있습니다.")
+        raise api_error(413, "IMAGE_TOO_LARGE", "Image size must be 10MB or less.")
 
     inspection_id_str = str(meta.inspection_id)
 
-    # 1. 멱등성 처리 (중복 전송 시 기존 결과 반환)
+    # 1. Idempotency handling (return existing result on duplicate submission)
     existing = db.query(Inspection).filter(Inspection.inspection_id == inspection_id_str).first()
     if existing:
         logger.info("duplicate inspection ignored: id=%s", inspection_id_str)
@@ -80,13 +80,13 @@ async def receive_inspection(
             "final_status": existing.final_status,
         }
 
-    # 2. 이미지 파일 저장
+    # 2. Save image file
     image_path = save_image(meta.inspection_id, content)
 
-    # 3. 초기 최종 상태(final_status) 계산
+    # 3. Calculate initial final_status
     final_status = determine_final_status(meta.primary_verdict, meta.reposition_count)
 
-    # 4. EQUIPMENT 테이블에 장비 미등록 시 자동 생성
+    # 4. Auto-create equipment record in EQUIPMENT table if not registered
     equipment = db.query(Equipment).filter(Equipment.equipment_id == meta.equipment_id).first()
     if not equipment:
         equipment = Equipment(
@@ -96,7 +96,7 @@ async def receive_inspection(
         db.add(equipment)
         db.flush()
 
-    # 5. INSPECTION 레코드 저장
+    # 5. Save INSPECTION record
     new_inspection = Inspection(
         inspection_id=inspection_id_str,
         equipment_id=meta.equipment_id,
@@ -109,7 +109,7 @@ async def receive_inspection(
     )
     db.add(new_inspection)
 
-    # 6. AI_RESULT 레코드 저장
+    # 6. Save AI_RESULT record
     defects_json = [d.model_dump(by_alias=True) for d in meta.detected_defects]
     new_ai_result = AIResult(
         inspection_id=inspection_id_str,
@@ -124,7 +124,7 @@ async def receive_inspection(
     )
     db.add(new_ai_result)
 
-    # 7. IMAGE 메타데이터 레코드 저장
+    # 7. Save IMAGE metadata record
     new_image = Image(
         inspection_id=inspection_id_str,
         image_path=image_path,

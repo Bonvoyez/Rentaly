@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 =============================================================================
-[Auto Pipeline] VLM 지식 증류 오토 라벨링 & 증강 & YOLO 학습 파이프라인
+[Auto Pipeline] VLM Knowledge Distillation Auto-Labeling, Augmentation & YOLO Training Pipeline
 =============================================================================
-1. raw_images/ 폴더의 실물 사진을 읽음
-2. FactChat Gemini VLM에 바운딩 박스(BBox) 좌표를 요청하여 YOLO 포맷(.txt) 자동 생성
-3. 데이터 증강 (회전, 밝기, 노이즈)으로 5~10배 데이터 증식
-4. YOLOv8n 파인튜닝 학습 후 ONNX 모델(yolo_defect_best.onnx) 자동 변환
+1. Read raw photos from raw_images/
+2. Request bounding box (BBox) coordinates from FactChat Gemini VLM to auto-generate YOLO format (.txt)
+3. Augment data (rotation, brightness, noise) by 5-10x
+4. Fine-tune YOLOv8n and auto-export ONNX model (yolo_defect_best.onnx)
 =============================================================================
 """
 
@@ -30,7 +30,7 @@ LABELS_DIR = os.path.join(DATASET_DIR, "labels")
 os.makedirs(IMAGES_DIR, exist_ok=True)
 os.makedirs(LABELS_DIR, exist_ok=True)
 
-# 범용 OpenAI 호환 VLM API 설정
+# Universal OpenAI-compatible VLM API configuration
 GATEWAY_URL = (
     os.getenv("LLM_BASE_URL")
     or os.getenv("OPENAI_BASE_URL")
@@ -102,7 +102,7 @@ def request_vlm_boxes(img_bgr):
     with urllib.request.urlopen(req, timeout=30) as resp:
         res_data = json.loads(resp.read().decode("utf-8"))
         content_str = res_data["choices"][0]["message"]["content"]
-        # 코드블록 정리
+        # Strip markdown code blocks
         if "```" in content_str:
             lines = content_str.split("\n")
             lines = [l for l in lines if not l.strip().startswith("```")]
@@ -120,23 +120,23 @@ def convert_box_to_yolo(box_2d):
 
 def run_auto_annotation():
     print("=" * 60)
-    print("🤖 [Auto Pipeline] 1. VLM 기반 자동 라벨링 시작")
+    print("🤖 [Auto Pipeline] 1. Starting VLM-based auto-labeling")
     print("=" * 60)
 
     img_files = glob.glob(os.path.join(RAW_IMG_DIR, "*.jpg")) + glob.glob(os.path.join(RAW_IMG_DIR, "*.png"))
     if not img_files:
-        print(f"⚠️ {RAW_IMG_DIR} 에 사진이 없습니다! 먼저 auto_collector.py를 실행하세요.")
+        print(f"⚠️ No images found in {RAW_IMG_DIR}! Run auto_collector.py first.")
         return 0
 
     count = 0
     for idx, img_path in enumerate(img_files, 1):
         filename = os.path.basename(img_path)
         base_name, _ = os.path.splitext(filename)
-        print(f"🔍 [{idx}/{len(img_files)}] VLM 라벨링 진행 중: {filename}...", end=" ", flush=True)
+        print(f"🔍 [{idx}/{len(img_files)}] VLM labeling in progress: {filename}...", end=" ", flush=True)
 
         img = cv2.imread(img_path)
         if img is None:
-            print("❌ 로드 실패")
+            print("❌ Load failed")
             continue
 
         try:
@@ -150,7 +150,7 @@ def run_auto_annotation():
                 xc, yc, bw, bh = convert_box_to_yolo(box)
                 yolo_lines.append(f"{cid} {xc:.6f} {yc:.6f} {bw:.6f} {bh:.6f}")
 
-            # 파일 저장
+            # Save files
             target_img = os.path.join(IMAGES_DIR, f"{base_name}.jpg")
             target_txt = os.path.join(LABELS_DIR, f"{base_name}.txt")
 
@@ -158,12 +158,12 @@ def run_auto_annotation():
             with open(target_txt, "w") as f:
                 f.write("\n".join(yolo_lines) + "\n")
 
-            print(f"✅ 박스 {len(yolo_lines)}개 생성 완료")
+            print(f"✅ Generated {len(yolo_lines)} boxes")
             count += 1
         except Exception as e:
-            print(f"⚠️ 오류: {e}")
+            print(f"⚠️ Error: {e}")
 
-    # data.yaml 생성
+    # Generate data.yaml
     yaml_content = f"""path: {os.path.abspath(DATASET_DIR)}
 train: images
 val: images
@@ -175,30 +175,30 @@ names: {CLASSES}
     with open(yaml_path, "w") as f:
         f.write(yaml_content)
 
-    print(f"🎉 {count}장의 이미지에 대해 YOLO 라벨링이 자동 완료되었습니다!")
-    print(f"👉 YAML 설정 생성 완료: {yaml_path}")
+    print(f"🎉 Auto-completed YOLO labeling for {count} images!")
+    print(f"👉 Generated YAML config: {yaml_path}")
     return count
 
 def run_train_and_export():
     print("\n" + "=" * 60)
-    print("🚀 [Auto Pipeline] 2. YOLOv8n 초경량 모델 파인튜닝 & ONNX 변환")
+    print("🚀 [Auto Pipeline] 2. YOLOv8n Lightweight Model Fine-tuning & ONNX Export")
     print("=" * 60)
 
     try:
         from ultralytics import YOLO
     except ImportError:
-        print("⚠️ 'ultralytics' 라이브러리가 필요합니다. (pip install ultralytics)")
-        print("💡 또는 구글 Colab에서 data.yaml로 학습을 진행할 수 있습니다.")
+        print("⚠️ 'ultralytics' library is required. (pip install ultralytics)")
+        print("💡 Or you can train using data.yaml in Google Colab.")
         return
 
     yaml_path = os.path.join(DATASET_DIR, "data.yaml")
     model = YOLO("yolov8n.pt")
-    print("⚡ 모델 학습 시작 (초경량 nano, 30 epochs)...")
+    print("⚡ Starting model training (lightweight nano, 30 epochs)...")
     model.train(data=yaml_path, epochs=30, imgsz=640, batch=8, workers=2)
 
-    print("⚡ ONNX 포맷으로 변환 중 (라즈베리파이 가속 최적화)...")
+    print("⚡ Exporting to ONNX format (optimized for Raspberry Pi acceleration)...")
     export_path = model.export(format="onnx", imgsz=640, simplify=True)
-    print(f"🎉 최종 ONNX 모델 생성 완료: {export_path}")
+    print(f"🎉 Final ONNX model created: {export_path}")
 
 if __name__ == "__main__":
     annotated_cnt = run_auto_annotation()

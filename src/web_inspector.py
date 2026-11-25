@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 =============================================================================
-[Rentaly Edge Web Inspector] 라즈베리파이 AI 외관 검사 스튜디오 & 데이터 수집기
+[Rentaly Edge Web Inspector] Raspberry Pi AI Exterior Inspection Studio & Data Collector
 =============================================================================
-- Picamera2 Continuous AutoFocus 실시간 프리뷰 (/video_feed)
-- 스마트 무제한 가이드 데이터 수집기 (추천 프리셋 + 커스텀 무제한 촬영)
-- VLM 지식 증류 오토 라벨링 & YOLO 파이프라인
-- FactChat VLM 정밀 검사 & MQTT 단계별 텔레메트리
+- Picamera2 Continuous AutoFocus real-time preview (/video_feed)
+- Smart unlimited guided data collector (recommended presets + custom unlimited capture)
+- VLM knowledge distillation auto-labeling & YOLO pipeline
+- FactChat VLM precision inspection & MQTT step-by-step telemetry
 =============================================================================
 """
 
@@ -25,10 +25,10 @@ import numpy as np
 import cv2
 from flask import Flask, render_template_string, request, jsonify, Response
 
-# 카메라 스트리머 모듈
+# Camera streamer module
 from camera_streamer import get_camera_streamer, HAS_PICAM2
 
-# VLM 모듈 및 MQTT 모듈
+# VLM module and MQTT module
 from vlm_inspector import inspect_with_vlm, calculate_blur_score
 from mqtt_publisher import get_telemetry_publisher
 from auto_inspector_loop import get_auto_inspector
@@ -48,28 +48,28 @@ last_inspection_result = None
 reposition_count = 0
 last_inspection_bgr = None
 
-# 체계적인 20가지 정밀 시나리오 프리셋
+# Systematic 20 precision scenario presets
 GUIDED_STEPS = [
-    {"step": 1, "title": "🎯 [정상 1] 완벽한 정가운데 수직 정렬", "guide": "보드를 화면 정중앙에 똑바로 배치 (케이블을 완전히 치운 상태)", "category": "normal_center"},
-    {"step": 2, "title": "🎯 [정상 2] 약간 좌측으로 이동", "guide": "보드를 왼쪽으로 2~3cm 슥 이동", "category": "normal_left"},
-    {"step": 3, "title": "🎯 [정상 3] 약간 우측으로 이동", "guide": "보드를 오른쪽으로 2~3cm 슥 이동", "category": "normal_right"},
-    {"step": 4, "title": "🎯 [정상 4] 약간 상단(위쪽)으로 이동", "guide": "보드를 위쪽으로 2~3cm 살짝 밀어두기", "category": "normal_top"},
-    {"step": 5, "title": "🎯 [정상 5] 약간 하단(아래쪽)으로 이동", "guide": "보드를 아래쪽으로 2~3cm 살짝 당겨두기", "category": "normal_bottom"},
-    {"step": 6, "title": "📐 [회전 1] 시계 방향 15도", "guide": "보드를 오른쪽으로 비스듬히 살짝 돌려두기", "category": "rotate_cw_15"},
-    {"step": 7, "title": "📐 [회전 2] 반시계 방향 15도", "guide": "보드를 왼쪽으로 비스듬히 살짝 돌려두기", "category": "rotate_ccw_15"},
-    {"step": 8, "title": "📐 [회전 3] 90도 회전 (세로 배치)", "guide": "보드를 90도 돌려 세로 모양으로 배치", "category": "rotate_90"},
-    {"step": 9, "title": "💡 [거리 1] 카메라 초근접 (확대)", "guide": "보드를 살짝 들어 올려 카메라 렌즈에 가깝게 접근", "category": "dist_close"},
-    {"step": 10, "title": "💡 [거리 2] 카메라 원거리 (축소)", "guide": "보드를 조금 더 멀리 내려놓기", "category": "dist_far"},
-    {"step": 11, "title": "🚫 [이상 1] 리본 케이블 가림", "guide": "흰색 카메라 리본선이 보드 기판을 가로지르게 배치", "category": "cable_occlusion"},
-    {"step": 12, "title": "🚫 [이상 2] 전원/USB선 가림", "guide": "검은색 케이블선이나 손가락이 기판 일부를 살짝 가리게 배치", "category": "hand_cable_occlusion"},
-    {"step": 13, "title": "🚫 [이상 3] 좌측 화면 이탈 (잘림)", "guide": "보드 왼쪽 모서리가 화면 테두리 밖으로 삐져나가게 배치", "category": "cut_left"},
-    {"step": 14, "title": "🚫 [이상 4] 우측 화면 이탈 (잘림)", "guide": "보드 오른쪽 모서리가 화면 테두리 밖으로 삐져나가게 배치", "category": "cut_right"},
-    {"step": 15, "title": "🚫 [이상 5] 상단/하단 화면 이탈 (잘림)", "guide": "보드 위나 아래가 화면 밖으로 잘리게 배치", "category": "cut_top_bottom"},
-    {"step": 16, "title": "🏷️ [라벨 1] 기판 위 자산 포스트잇", "guide": "'RPI-01' 같은 자산 번호 메모지를 기판 위에 얹기", "category": "asset_label_on"},
-    {"step": 17, "title": "🏷️ [라벨 2] 보드 주변 메모지", "guide": "메모지를 보드 바로 옆에 나란히 두기", "category": "asset_label_side"},
-    {"step": 18, "title": "🔴 [LED 1] 빨간 PWR LED 강조", "guide": "전원선 연결 상태에서 빨간 LED가 똑똑히 보이게 배치", "category": "pwr_led_on"},
-    {"step": 19, "title": "🌑 [환경 1] 그림자/어두운 조명", "guide": "손으로 그림자를 살짝 지게 하거나 조명을 가려보세요", "category": "lighting_shadow"},
-    {"step": 20, "title": "✨ [환경 2] 빛 반사/아크릴 케이스", "guide": "케이스에 빛이 반사되는 각도 연출", "category": "lighting_glare"}
+    {"step": 1, "title": "🎯 [Normal 1] Perfect centered vertical alignment", "guide": "Place the board straight in the center of the frame (cables completely out of the way)", "category": "normal_center"},
+    {"step": 2, "title": "🎯 [Normal 2] Slightly shifted left", "guide": "Slide the board 2-3cm to the left", "category": "normal_left"},
+    {"step": 3, "title": "🎯 [Normal 3] Slightly shifted right", "guide": "Slide the board 2-3cm to the right", "category": "normal_right"},
+    {"step": 4, "title": "🎯 [Normal 4] Slightly shifted up (top)", "guide": "Push the board 2-3cm upward", "category": "normal_top"},
+    {"step": 5, "title": "🎯 [Normal 5] Slightly shifted down (bottom)", "guide": "Pull the board 2-3cm downward", "category": "normal_bottom"},
+    {"step": 6, "title": "📐 [Rotation 1] Clockwise 15 degrees", "guide": "Tilt the board slightly to the right", "category": "rotate_cw_15"},
+    {"step": 7, "title": "📐 [Rotation 2] Counter-clockwise 15 degrees", "guide": "Tilt the board slightly to the left", "category": "rotate_ccw_15"},
+    {"step": 8, "title": "📐 [Rotation 3] 90-degree rotation (vertical)", "guide": "Rotate the board 90 degrees into a vertical orientation", "category": "rotate_90"},
+    {"step": 9, "title": "💡 [Distance 1] Camera close-up (zoom in)", "guide": "Lift the board slightly closer to the camera lens", "category": "dist_close"},
+    {"step": 10, "title": "💡 [Distance 2] Camera far (zoom out)", "guide": "Place the board slightly further away", "category": "dist_far"},
+    {"step": 11, "title": "🚫 [Defect 1] Ribbon cable occlusion", "guide": "Place the white camera ribbon cable across the PCB", "category": "cable_occlusion"},
+    {"step": 12, "title": "🚫 [Defect 2] Power/USB cable occlusion", "guide": "Place a black cable or finger slightly covering part of the PCB", "category": "hand_cable_occlusion"},
+    {"step": 13, "title": "🚫 [Defect 3] Left edge out of frame (cropped)", "guide": "Place the board so the left edge extends outside the frame", "category": "cut_left"},
+    {"step": 14, "title": "🚫 [Defect 4] Right edge out of frame (cropped)", "guide": "Place the board so the right edge extends outside the frame", "category": "cut_right"},
+    {"step": 15, "title": "🚫 [Defect 5] Top/bottom out of frame (cropped)", "guide": "Place the board so the top or bottom is cut off", "category": "cut_top_bottom"},
+    {"step": 16, "title": "🏷️ [Label 1] Asset sticky note on PCB", "guide": "Place an asset ID memo like 'RPI-01' on top of the PCB", "category": "asset_label_on"},
+    {"step": 17, "title": "🏷️ [Label 2] Memo note near board", "guide": "Place a memo note right next to the board", "category": "asset_label_side"},
+    {"step": 18, "title": "🔴 [LED 1] Red PWR LED highlight", "guide": "Ensure the red LED is clearly visible with power connected", "category": "pwr_led_on"},
+    {"step": 19, "title": "🌑 [Env 1] Shadow / dark lighting", "guide": "Cast a slight shadow with your hand or dim the light", "category": "lighting_shadow"},
+    {"step": 20, "title": "✨ [Env 2] Light glare / acrylic case", "guide": "Angle the case so light reflects off the surface", "category": "lighting_glare"}
 ]
 
 HTML_TEMPLATE = """
@@ -339,43 +339,43 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="container">
-        <h1>🔬 Rentaly AI 외관 검사 & 학습 데이터 스튜디오</h1>
-        <p class="subtitle">실시간 라이브 카메라 + 스마트 무제한 데이터 수집기 + FactChat VLM 검사</p>
+        <h1>🔬 Rentaly AI Exterior Inspection & Training Data Studio</h1>
+        <p class="subtitle">Live Camera + Smart Unlimited Data Collector + FactChat VLM Inspection</p>
 
-        <!-- 탭 메뉴 -->
+        <!-- Tab Menu -->
         <div class="tab-bar">
-            <button class="tab-btn active" onclick="switchTab('tab-inspect')">🔍 실시간 외관 검사 모드</button>
-            <button class="tab-btn" onclick="switchTab('tab-collect')">📸 스마트 데이터 수집 & 학습 모드</button>
+            <button class="tab-btn active" onclick="switchTab('tab-inspect')">🔍 Live Exterior Inspection Mode</button>
+            <button class="tab-btn" onclick="switchTab('tab-collect')">📸 Smart Data Collection & Training Mode</button>
         </div>
 
         <div class="view-panel">
-            <!-- 공통 실시간 프리뷰 영역 -->
+            <!-- Common Live Preview Area -->
             <div class="streams-grid">
                 <div class="screen-card">
                     <div class="screen-header">
-                        <span>🔴 실시간 카메라 프리뷰 (/video_feed)</span>
+                        <span>🔴 Live Camera Preview (/video_feed)</span>
                         <span class="live-tag">LIVE</span>
                     </div>
                     <div class="screen-box">
-                        <img src="/video_feed" alt="실시간 카메라 스트림">
+                        <img src="/video_feed" alt="Live Camera Stream">
                     </div>
                 </div>
 
                 <div class="screen-card">
                     <div class="screen-header">
-                        <span id="preview-title">📸 캡처 스틸샷</span>
+                        <span id="preview-title">📸 Captured Still Shot</span>
                         <span id="capture-time" style="color: #666;">-</span>
                     </div>
                     <div class="screen-box">
-                        <img id="result-img" src="" style="display: none;" alt="캡처 이미지">
+                        <img id="result-img" src="" style="display: none;" alt="Captured Image">
                         <div id="placeholder" style="color: #666; font-size: 14px;">
-                            캡처 버튼을 누르면 사진이 표시됩니다
+                            Captured image will appear here when you click Capture
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- [탭 1: 검사 모드] -->
+            <!-- [Tab 1: Inspection Mode] -->
             <div id="tab-inspect">
                 <div style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;">
                     <button class="btn-action" onclick="takeSnapshot()">
@@ -551,9 +551,9 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/gallery');
                 const data = await res.json();
                 const box = document.getElementById('gallery-box');
-                document.getElementById('collected-summary').innerText = `수집된 데이터: ${data.images.length}장`;
+                document.getElementById('collected-summary').innerText = `Collected Data: ${data.images.length} images`;
                 if (data.images.length === 0) {
-                    box.innerHTML = '<span style="color: #666; font-size: 13px;">아직 수집된 이미지가 없습니다. 버튼을 눌러 촬영하세요!</span>';
+                    box.innerHTML = '<span style="color: #666; font-size: 13px;">No images collected yet. Press the button to capture!</span>';
                     return;
                 }
                 box.innerHTML = data.images.map(img => `
@@ -568,7 +568,7 @@ HTML_TEMPLATE = """
         }
 
         async function clearDataset() {
-            if (!confirm('수집된 모든 사진을 삭제하고 처음부터 다시 찍을까요?')) return;
+            if (!confirm('Delete all collected photos and start over?')) return;
             await fetch('/api/clear_gallery', { method: 'POST' });
             currentStepIdx = 0;
             updateGuideUI();
@@ -576,37 +576,37 @@ HTML_TEMPLATE = """
         }
 
         async function runAutoPipeline() {
-            if (!confirm('수집된 사진들에 대해 FactChat VLM 오토 라벨링 및 YOLO 데이터셋 생성을 진행할까요?')) return;
-            alert('라즈베리파이에서 VLM 자동 라벨링이 백그라운드로 시작됩니다! 완료 후 콘솔 및 데이터셋에 저장됩니다.');
+            if (!confirm('Run FactChat VLM auto-labeling and YOLO dataset generation on collected photos?')) return;
+            alert('VLM auto-labeling is starting in the background on the Raspberry Pi! Results will be saved to the console and dataset upon completion.');
             fetch('/api/run_pipeline', { method: 'POST' });
         }
 
-        // [검사 탭 로직]
+        // [Inspection Tab Logic]
         function updateUI(data) {
             document.getElementById('loading-inspect').style.display = 'none';
             document.getElementById('btn-backend').disabled = (data.primary_verdict === 'REPOSITION' || data.primary_verdict === 'ERROR');
 
             const badge = document.querySelector('.status-badge');
             badge.className = 'status-badge badge-' + data.primary_verdict;
-            badge.innerText = data.primary_verdict + ' (결함: ' + (data.defect_type || 'NONE') + ')';
+            badge.innerText = data.primary_verdict + ' (Defect: ' + (data.defect_type || 'NONE') + ')';
 
-            document.getElementById('val-blur').innerText = data.blur_score + ' 점';
-            document.getElementById('val-led').innerText = data.pwr_led_status ? '🔴 SOLID ON (점등)' : '⚪ OFF (소등)';
+            document.getElementById('val-blur').innerText = data.blur_score + ' pts';
+            document.getElementById('val-led').innerText = data.pwr_led_status ? '🔴 SOLID ON' : '⚪ OFF';
             document.getElementById('val-defect').innerText = data.defect_type || 'NONE';
             document.getElementById('val-infer').innerText = data.infer_ms + ' ms';
 
-            document.getElementById('val-model').innerText = data.model_text || '식별 불가';
-            document.getElementById('val-ic').innerText = data.ic_id_text || '미검출';
-            document.getElementById('val-fcc').innerText = data.fcc_id_text || '미검출';
-            document.getElementById('val-serial').innerText = data.device_unique_id || '없음 (기판 번호 사용)';
+            document.getElementById('val-model').innerText = data.model_text || 'Unidentified';
+            document.getElementById('val-ic').innerText = data.ic_id_text || 'Not detected';
+            document.getElementById('val-fcc').innerText = data.fcc_id_text || 'Not detected';
+            document.getElementById('val-serial').innerText = data.device_unique_id || 'None (using board ID)';
             
             const visibleSpan = document.getElementById('val-visible');
             if (data.is_fully_visible) {
                 visibleSpan.style.color = '#00e676';
-                visibleSpan.innerText = '✅ 완전 노출 (4면 모두 프레임 내부)';
+                visibleSpan.innerText = '✅ Fully Visible (all 4 sides inside frame)';
             } else {
                 visibleSpan.style.color = '#ff1744';
-                visibleSpan.innerText = '❌ 잘림 감지 (보드 일부분이 화면 밖으로 나감)';
+                visibleSpan.innerText = '❌ Cropped (part of board is outside frame)';
             }
 
             document.getElementById('val-reason').innerText = data.reason;
@@ -626,12 +626,12 @@ HTML_TEMPLATE = """
                 const res = await fetch('/api/capture', { method: 'POST' });
                 const data = await res.json();
                 if (data.error) {
-                    alert('에러: ' + data.error);
+                    alert('Error: ' + data.error);
                 } else {
                     updateUI(data);
                 }
             } catch (err) {
-                alert('요청 실패: ' + err);
+                alert('Request failed: ' + err);
             } finally {
                 document.getElementById('loading-inspect').style.display = 'none';
             }
@@ -641,23 +641,23 @@ HTML_TEMPLATE = """
             const btn = document.getElementById('btn-backend');
             const resBox = document.getElementById('backend-result');
             btn.disabled = true;
-            btn.innerText = '⏳ 백엔드 전송 중...';
+            btn.innerText = '⏳ Sending to backend...';
 
             try {
                 const res = await fetch('/api/submit_backend', { method: 'POST' });
                 const data = await res.json();
                 resBox.style.display = 'block';
                 if (data.success) {
-                    resBox.innerHTML = '<b>✅ 백엔드 등록 성공!</b><br><pre>' + JSON.stringify(data.backend_response, null, 2) + '</pre>';
+                    resBox.innerHTML = '<b>✅ Backend registration succeeded!</b><br><pre>' + JSON.stringify(data.backend_response, null, 2) + '</pre>';
                 } else {
-                    resBox.innerHTML = '<b>❌ 백엔드 등록 실패:</b> ' + (data.error || '알 수 없는 오류');
+                    resBox.innerHTML = '<b>❌ Backend registration failed:</b> ' + (data.error || 'Unknown error');
                 }
             } catch (err) {
                 resBox.style.display = 'block';
-                resBox.innerHTML = '<b>❌ 통신 실패:</b> ' + err;
+                resBox.innerHTML = '<b>❌ Communication failed:</b> ' + err;
             } finally {
                 btn.disabled = false;
-                btn.innerText = '🚀 백엔드 서버로 결과 전송 (POST)';
+                btn.innerText = '🚀 Send Result to Backend Server (POST)';
             }
         }
     </script>
@@ -669,7 +669,7 @@ HTML_TEMPLATE = """
 
 def _send_result_to_backend(insp_id, res_dict, img_bgr):
     if not BACKEND_URL:
-        print("ℹ️ [Backend] BACKEND_URL 미설정 — 로컬 단독 모드로 동작하여 DB 전송을 건너뜁니다.")
+        print("ℹ️ [Backend] BACKEND_URL not set — running in local standalone mode and skipping DB upload.")
         return None
     metadata = {
         "device_id": DEVICE_ID,
@@ -715,7 +715,7 @@ def _send_result_to_backend(insp_id, res_dict, img_bgr):
     req = urllib.request.Request(BACKEND_URL, headers=headers, data=b"\r\n".join(body))
     with urllib.request.urlopen(req, timeout=10) as resp:
         backend_res = json.loads(resp.read().decode("utf-8"))
-        print(f"🚀 [Backend DB 저장 성공!] ID={insp_id} -> {backend_res}")
+        print(f"🚀 [Backend DB Save Succeeded!] ID={insp_id} -> {backend_res}")
         return backend_res
 
 def process_and_inspect(img_bgr):
@@ -732,12 +732,12 @@ def process_and_inspect(img_bgr):
 
     blur_score = calculate_blur_score(img_bgr)
 
-    # 1. OCR 단계 & 캡처 사진 전달
+    # 1. OCR stage & send captured image
     publisher.publish_telemetry(
         inspection_id=insp_id,
         stage="OCR",
         progress_percent=25,
-        message="보드 표면의 고유 시리얼 번호를 인식하고 있습니다...",
+        message="Recognizing unique serial number on the board surface...",
         blur_score=blur_score,
         stabilization_ms=300,
         capture_image_url=capture_image_url
@@ -749,18 +749,18 @@ def process_and_inspect(img_bgr):
 
     time.sleep(0.4)
 
-    # 2. LED 확인 단계
+    # 2. LED check stage
     pwr_on = bool(result.get("pwr_led_status", False))
     if not pwr_on and result.get("primary_verdict") != "REPOSITION":
-        # REPOSITION(손 가림/잘림)이 아닐 때만 PWR LED 미점등을 FAIL로 강제 전환
+        # Force FAIL for unlit PWR LED only when not REPOSITION (hand occlusion / cropped)
         result["primary_verdict"] = "FAIL"
         if not result.get("reason"):
-            result["reason"] = "전원 PWR LED가 꺼져 있습니다."
-        led_msg = "PWR LED 미점등 (전원 불량)"
+            result["reason"] = "Power PWR LED is off."
+        led_msg = "PWR LED off (power failure)"
     elif not pwr_on:
-        led_msg = "보드가 가려지거나 잘려 LED 확인 불가"
+        led_msg = "Board occluded or cropped; unable to verify LED"
     else:
-        led_msg = "온보드 PWR LED 정상 점등 확인"
+        led_msg = "Onboard PWR LED verified lit"
 
     publisher.publish_telemetry(
         inspection_id=insp_id,
@@ -773,21 +773,21 @@ def process_and_inspect(img_bgr):
 
     time.sleep(0.4)
 
-    # 3. AI 외관 검사 단계
+    # 3. AI exterior inspection stage
     verdict = result.get("primary_verdict", "FAIL")
     publisher.publish_telemetry(
         inspection_id=insp_id,
         stage="AI_INFERENCE",
         progress_percent=85,
-        message=f"AI 모델 외관 분석 완료 ({verdict})",
+        message=f"AI model exterior analysis complete ({verdict})",
         blur_score=blur_score,
         stabilization_ms=300
     )
 
-    # 화면에서 체크마크 인지할 수 있도록 1.2초 대기
+    # Wait 1.2s so the checkmark is visible on screen
     time.sleep(1.2)
 
-    # 4. 최종 완료 or 재배치 화면 전환
+    # 4. Switch to final completion or reposition screen
     if verdict == "PASS":
         led_ctrl.set_pass()
     else:
@@ -799,7 +799,7 @@ def process_and_inspect(img_bgr):
             inspection_id=insp_id,
             stage="REPOSITION",
             progress_percent=100,
-            message=result.get("reason", "보드를 다시 놓아주세요."),
+            message=result.get("reason", "Please reposition the board."),
             blur_score=blur_score,
             stabilization_ms=300,
             reposition_count=reposition_count
@@ -810,7 +810,7 @@ def process_and_inspect(img_bgr):
             inspection_id=insp_id,
             stage="COMPLETED",
             progress_percent=100,
-            message=f"검사가 완료되었습니다. 최종 결과: {verdict}",
+            message=f"Inspection complete. Final result: {verdict}",
             blur_score=blur_score,
             stabilization_ms=300
         )
@@ -818,12 +818,12 @@ def process_and_inspect(img_bgr):
     result["image_base64"] = base64.b64encode(full_buf).decode("utf-8")
     last_inspection_result = result
 
-    # 5. REPOSITION이 아닌 최종 판정(PASS / FAIL)일 때 백엔드 DB로 자동 전송!
+    # 5. Auto-send to backend DB when final verdict is PASS / FAIL (not REPOSITION)!
     if verdict in ["PASS", "FAIL"]:
         try:
             _send_result_to_backend(insp_id, result, img_bgr)
         except Exception as e:
-            print(f"⚠️ [Backend] 자동 전송 중 예외: {e}")
+            print(f"⚠️ [Backend] Exception during auto-upload: {e}")
 
     return result
 
@@ -836,7 +836,7 @@ def index():
 @app.route("/video_feed")
 def video_feed():
     streamer = get_camera_streamer()
-    get_auto_inspector() # MQTT 명령 수신기 및 루프 기동
+    get_auto_inspector() # Start MQTT command receiver and loop
     if not streamer.running:
         return "Camera not running", 503
     return Response(streamer.generate_mjpeg(),
@@ -852,10 +852,10 @@ def start_inspection_endpoint():
 @app.route("/api/capture", methods=["POST"])
 def capture_and_inspect():
     streamer = get_camera_streamer()
-    get_auto_inspector() # MQTT 명령 수신기 및 루프 기동
+    get_auto_inspector() # Start MQTT command receiver and loop
     bgr = streamer.get_latest_frame()
     if bgr is None:
-        return jsonify({"error": "카메라 프레임을 가져올 수 없습니다."}), 500
+        return jsonify({"error": "Unable to get camera frame."}), 500
 
     try:
         res = process_and_inspect(bgr)
@@ -871,10 +871,10 @@ def guided_capture():
     category = data.get("category", "sample")
 
     streamer = get_camera_streamer()
-    get_auto_inspector() # MQTT 명령 수신기 및 루프 기동
+    get_auto_inspector() # Start MQTT command receiver and loop
     bgr = streamer.get_latest_frame()
     if bgr is None:
-        return jsonify({"success": False, "error": "카메라 프레임 획득 실패"}), 500
+        return jsonify({"success": False, "error": "Failed to capture camera frame"}), 500
 
     filename = f"{step:02d}_{category}_{int(time.time())}.jpg"
     save_path = os.path.join(DATASET_RAW_DIR, filename)
@@ -926,14 +926,14 @@ def get_raw_image(filename):
 @app.route("/api/run_pipeline", methods=["POST"])
 def trigger_pipeline():
     os.system(f"python3 {os.path.join(os.path.dirname(__file__), 'auto_pipeline.py')} &")
-    return jsonify({"success": True, "message": "파이프라인 백그라운드 구동 시작"})
+    return jsonify({"success": True, "message": "Pipeline started in background"})
 
 
 @app.route("/api/submit_backend", methods=["POST"])
 def submit_to_backend():
     global last_inspection_result, last_inspection_bgr
     if last_inspection_result is None or last_inspection_bgr is None:
-        return jsonify({"error": "전송할 최근 검사 결과가 없습니다."}), 400
+        return jsonify({"error": "No recent inspection result to send."}), 400
 
     insp_id = str(uuid.uuid4())
     metadata = {

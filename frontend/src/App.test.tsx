@@ -39,7 +39,7 @@ describe('Rentaly routes', () => {
     renderApp()
 
     // Then
-    expect(screen.getByRole('heading', { name: '반납을 시작할까요?' })).toBeVisible()
+    expect(screen.getByRole('heading', { name: 'Ready to return your device?' })).toBeVisible()
   })
 
   it('shows the camera feed behind the placement guide and falls back when it fails', () => {
@@ -47,15 +47,15 @@ describe('Rentaly routes', () => {
     window.history.replaceState({}, '', '/kiosk')
     renderApp()
 
-    const preview = screen.getByRole('img', { name: '실시간 카메라 프리뷰' })
+    const preview = screen.getByRole('img', { name: 'Live camera preview' })
     expect(preview).toHaveAttribute('src', 'https://camera.example.com/video_feed')
     expect(preview.parentElement).toHaveClass('h-[200px]', 'w-[282px]')
     expect(preview).toHaveClass('object-cover')
-    expect(screen.getByLabelText('보드 배치 가이드')).toHaveClass('inset-7')
+    expect(screen.getByLabelText('Board placement guide')).toHaveClass('inset-7')
 
     fireEvent.error(preview)
-    expect(screen.getByRole('img', { name: '검사대 중앙에 놓인 Raspberry Pi 보드' })).toBeVisible()
-    expect(screen.getByLabelText('보드 배치 가이드')).toBeVisible()
+    expect(screen.getByRole('img', { name: 'Raspberry Pi board centered on inspection station' })).toBeVisible()
+    expect(screen.getByLabelText('Board placement guide')).toBeVisible()
   })
 
   it('publishes START and keeps the camera stream visible during inspection', async () => {
@@ -66,11 +66,11 @@ describe('Rentaly routes', () => {
     renderApp()
 
     act(() => emitConnection?.('connected'))
-    fireEvent.click(screen.getByRole('button', { name: '검사 시작' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start Inspection' }))
 
     await waitFor(() => expect(publishStart).toHaveBeenCalledOnce())
-    expect(await screen.findByRole('img', { name: '실시간 카메라 프리뷰' })).toHaveAttribute('src', 'https://camera.example.com/video_feed')
-    expect(screen.getByText('고유번호 확인')).toBeVisible()
+    expect(await screen.findByRole('img', { name: 'Live camera preview' })).toHaveAttribute('src', 'https://camera.example.com/video_feed')
+    expect(screen.getByText('Serial Verification')).toBeVisible()
   })
 
   it('labels the admin authentication flow as mock-backed', () => {
@@ -81,7 +81,7 @@ describe('Rentaly routes', () => {
     renderApp()
 
     // Then
-    expect(screen.getByText('Mock 인증')).toBeVisible()
+    expect(screen.getByText('Mock Auth')).toBeVisible()
   })
 
   it('centers the admin frame inside the viewport', () => {
@@ -92,7 +92,7 @@ describe('Rentaly routes', () => {
     renderApp()
 
     // Then
-    const shell = screen.getByRole('heading', { name: '검사 이력' }).closest('main')?.parentElement
+    const shell = screen.getByRole('heading', { name: 'Inspection History' }).closest('main')?.parentElement
     expect(shell).toBeInTheDocument()
     expect(shell).toHaveClass('max-w-[1440px]', 'w-full')
   })
@@ -105,8 +105,8 @@ describe('Rentaly routes', () => {
     renderApp()
 
     // Then
-    expect(screen.getByText('Mock 인증')).toBeVisible()
-    expect(screen.queryByRole('heading', { name: '반납을 시작할까요?' })).not.toBeInTheDocument()
+    expect(screen.getByText('Mock Auth')).toBeVisible()
+    expect(screen.queryByRole('heading', { name: 'Ready to return your device?' })).not.toBeInTheDocument()
   })
 
   it('blocks admin routes in a kiosk deployment', () => {
@@ -118,8 +118,8 @@ describe('Rentaly routes', () => {
     renderApp()
 
     // Then
-    expect(screen.getByRole('heading', { name: '반납을 시작할까요?' })).toBeVisible()
-    expect(screen.queryByText('Mock 인증')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Ready to return your device?' })).toBeVisible()
+    expect(screen.queryByText('Mock Auth')).not.toBeInTheDocument()
   })
 
   it('blocks kiosk routes in an admin deployment', () => {
@@ -131,9 +131,9 @@ describe('Rentaly routes', () => {
     renderApp()
 
     // Then
-    expect(screen.getByRole('heading', { name: '관리자 로그인' })).toBeVisible()
-    expect(screen.queryByText('Mock 인증')).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: '반납을 시작할까요?' })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Admin Login' })).toBeVisible()
+    expect(screen.queryByText('Mock Auth')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Ready to return your device?' })).not.toBeInTheDocument()
   })
 
   it('keeps the camera live and uses the captured image only if the stream fails', () => {
@@ -158,10 +158,10 @@ describe('Rentaly routes', () => {
     }))
 
     // Then
-    const preview = screen.getByRole('img', { name: '실시간 카메라 프리뷰' })
+    const preview = screen.getByRole('img', { name: 'Live camera preview' })
     expect(preview).toHaveAttribute('src', 'https://camera.example.com/video_feed')
     fireEvent.error(preview)
-    expect(screen.getByRole('img', { name: '검사대에서 촬영한 Raspberry Pi 보드' })).toHaveAttribute('src', captureImageUrl)
+    expect(screen.getByRole('img', { name: 'Raspberry Pi board captured at station' })).toHaveAttribute('src', captureImageUrl)
   })
 
   it('keeps a received inspection visible without calling a dropped MQTT connection demo mode', () => {
@@ -173,12 +173,12 @@ describe('Rentaly routes', () => {
     act(() => emitConnection?.('connected'))
     act(() => emitTelemetry?.({
       inspectionId: 'inspection-1', deviceId: 'station-01', stage: 'AI_INFERENCE',
-      progressPercent: 86, blurScore: 180, stabilizationMs: 300, message: '외관 검사 중',
+      progressPercent: 86, blurScore: 180, stabilizationMs: 300, message: 'Inspecting exterior',
     }))
     act(() => emitConnection?.('disconnected'))
 
-    expect(screen.getByText('연결 끊김')).toBeVisible()
-    expect(screen.queryByText('데모 모드')).not.toBeInTheDocument()
+    expect(screen.getByText('Disconnected')).toBeVisible()
+    expect(screen.queryByText('Demo Mode')).not.toBeInTheDocument()
     expect(screen.getByText('86%')).toBeVisible()
   })
 })

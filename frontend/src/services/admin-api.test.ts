@@ -47,8 +47,8 @@ it('sends the required reason to the retroactive rejection endpoint', async () =
     }))
   }))
 
-  await adminApi.retroactiveReject('inspection-1', '외관 결함 확인')
+  await adminApi.retroactiveReject('inspection-1', 'Exterior defect confirmed')
 
   expect(requestUrl).toContain('/api/v1/admin/inspections/inspection-1/retroactive-reject')
-  expect(requestBody).toEqual({ reason: '외관 결함 확인' })
+  expect(requestBody).toEqual({ reason: 'Exterior defect confirmed' })
 })

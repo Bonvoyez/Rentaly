@@ -7,7 +7,7 @@ const baseTelemetry = {
   progress_percent: 100,
   blur_score: 182.4,
   stabilization_ms: 320,
-  message: '검사가 완료되었습니다.',
+  message: 'Inspection completed.',
 }
 
 function encodeTelemetry(value: Readonly<Record<string, string | number>>): Uint8Array {

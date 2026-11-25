@@ -12,12 +12,12 @@ IMAGE_STORAGE_PATH = os.getenv("IMAGE_STORAGE_PATH", "/app/storage/images")
 
 def purge_expired_passed_images(db: Session):
     """
-    PASSED 상태로 30일이 지난 검사 건의 실제 이미지 파일 및 DB 레코드 정리
-    PENDING_REVIEW, CONFIRMED_REJECT 등은 영구 보존 정책 유지
+    Purge image files and DB records for PASSED inspections older than 30 days.
+    PENDING_REVIEW, CONFIRMED_REJECT, etc. are retained permanently.
     """
     threshold_date = datetime.utcnow() - timedelta(days=RETENTION_DAYS)
     
-    # 30일이 지난 PASSED 상태의 검사 건 조회
+    # Query PASSED inspections older than 30 days
     expired_inspections = (
         db.query(Inspection)
         .filter(
@@ -31,7 +31,7 @@ def purge_expired_passed_images(db: Session):
     for insp in expired_inspections:
         images = db.query(Image).filter(Image.inspection_id == insp.inspection_id).all()
         for img in images:
-            # 실제 영속 볼륨 파일 삭제
+            # Delete actual file on persistent volume
             if os.path.exists(img.image_path):
                 try:
                     os.remove(img.image_path)
@@ -39,7 +39,7 @@ def purge_expired_passed_images(db: Session):
                 except OSError as e:
                     logger.error(f"Failed to delete file {img.image_path}: {e}")
             
-            # DB 레코드 제거
+            # Remove DB record
             db.delete(img)
             deleted_count += 1
 

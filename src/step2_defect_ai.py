@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 =============================================================================
-[Step 2] 정밀 AI 외관 검사 & 모션 블러 필터 모듈 (엄격 판정 모드)
+[Step 2] Precision AI Exterior Inspection & Motion Blur Filter Module (Strict Mode)
 =============================================================================
-- 1차 방어선: 라플라시안 분산 기반 영상 선명도(블러) 계측
-    -> 기준 점수(100점) 미만 시 AI 추론 없이 즉시 [REPOSITION] 판정!
-- 2차 방어선: YOLOv8 ONNX 초경량 엔진 기반 부품 전수 검사 (AND 조건)
-    -> 필수 부품: processor + ports_block + gpio_header + rpi4_board
-    -> 화면 밖 잘림, 가림, 누락 발생 시 즉시 [FAIL / REPOSITION] 판정!
+- 1st line of defense: Laplacian variance-based image sharpness (blur) measurement
+    -> If below threshold (100), immediately return [REPOSITION] without AI inference!
+- 2nd line of defense: YOLOv8 ONNX lightweight engine-based component inspection (AND condition)
+    -> Required components: processor + ports_block + gpio_header + rpi4_board
+    -> If cropped out of frame, occluded, or missing, immediately return [FAIL / REPOSITION]!
 =============================================================================
 """
 
@@ -24,17 +24,17 @@ PROJECT_ROOT = os.path.dirname(CURRENT_DIR)
 MODEL_PATH = os.path.join(CURRENT_DIR, "best.onnx")
 SAMPLE_IMAGE = os.path.join(PROJECT_ROOT, "sample_data", "inspection_result.jpg")
 
-# 클래스 목록 (0: gpio_header, 1: ports_block, 2: processor, 3: rpi4_board)
+# Class list (0: gpio_header, 1: ports_block, 2: processor, 3: rpi4_board)
 CLASS_NAMES = ["gpio_header", "ports_block", "processor", "rpi4_board"]
 
-# 엄격한 검사 기준
-BLUR_THRESHOLD = 80.0         # 블러 점수가 80점 미만이면 초점 흐림/흔들림으로 판정
-CONFIDENCE_THRESHOLD = 0.50   # 50% 이상 확실해야 정상 부품으로 인정
+# Strict inspection thresholds
+BLUR_THRESHOLD = 80.0         # Below 80 is considered out-of-focus / motion-blurred
+CONFIDENCE_THRESHOLD = 0.50   # Must be >= 50% confident to count as valid component
 NMS_THRESHOLD = 0.45
 
 
 def calculate_blur_score(image_or_path):
-    """라플라시안 분산을 이용해 이미지의 선명도(블러 점수)를 계산합니다."""
+    """Calculate image sharpness (blur score) using Laplacian variance."""
     if isinstance(image_or_path, str):
         img = cv2.imread(image_or_path, cv2.IMREAD_GRAYSCALE)
     elif isinstance(image_or_path, np.ndarray):
@@ -47,7 +47,7 @@ def calculate_blur_score(image_or_path):
 
     if img is None:
         return 0.0
-    # 라플라시안 필터 적용 후 분산값 계산
+    # Apply Laplacian filter and compute variance
     score = cv2.Laplacian(img, cv2.CV_64F).var()
     return float(score)
 
@@ -81,11 +81,11 @@ class OnnxYoloDetector:
         if isinstance(img_or_path, str):
             img = cv2.imread(img_or_path)
             if img is None:
-                raise FileNotFoundError(f"이미지를 읽을 수 없습니다: {img_or_path}")
+                raise FileNotFoundError(f"Cannot read image: {img_or_path}")
         elif isinstance(img_or_path, np.ndarray):
             img = img_or_path
         else:
-            raise ValueError("img_or_path는 파일 경로 문자열 또는 np.ndarray여야 합니다.")
+            raise ValueError("img_or_path must be a file path string or np.ndarray.")
 
         orig_h, orig_w = img.shape[:2]
         blob, scale, pad_x, pad_y = self.preprocess(img)
@@ -133,71 +133,71 @@ class OnnxYoloDetector:
 
 def run_full_inspection(image_path):
     print("=" * 60)
-    print("🔬 [라즈베리파이 정밀 반납 검사 시스템 가동]")
-    print(f"[*] 대상 이미지: {os.path.basename(image_path)}")
+    print("🔬 [Raspberry Pi Precision Return Inspection System]")
+    print(f"[*] Target image: {os.path.basename(image_path)}")
     print("=" * 60)
 
     # -------------------------------------------------------------
-    # 1단계: 모션 블러 및 영상 품질 평가 (Fail-Safe 1차 방어선)
+    # Stage 1: Motion blur & image quality check (Fail-Safe 1st line)
     # -------------------------------------------------------------
-    print("[1단계] 영상 품질 및 선명도(블러) 평가 중...")
+    print("[Stage 1] Evaluating image quality & sharpness (blur)...")
     blur_score = calculate_blur_score(image_path)
-    print(f"    -> 측정된 블러 점수: {blur_score:.1f} 점 (기준치: {BLUR_THRESHOLD} 점 이상)")
+    print(f"    -> Measured blur score: {blur_score:.1f} (threshold: >= {BLUR_THRESHOLD})")
 
     if blur_score < BLUR_THRESHOLD:
         print("\n" + "=" * 60)
-        print("⚠️ [1차 판정 결과: REPOSITION]")
+        print("⚠️ [Primary Verdict: REPOSITION]")
         print("=" * 60)
-        print(f"❌ [판정 거부] 초점이 맞지 않거나 흔들림이 너무 심합니다! (점수: {blur_score:.1f})")
-        print("💡 [안내] 카메라 거리를 맞추거나 보드를 가만히 거치대에 놓아주세요.")
+        print(f"❌ [Rejected] Image is out of focus or too blurry! (score: {blur_score:.1f})")
+        print("💡 [Guide] Adjust camera distance or place the board still on the cradle.")
         print("=" * 60)
         return "REPOSITION"
 
-    print("    ✅ 영상 선명도 양호 (블러 검사 통과)")
+    print("    ✅ Image sharpness good (blur check passed)")
 
     # -------------------------------------------------------------
-    # 2단계: AI 외관 부품 전수 검사 (Fail-Safe 2차 방어선)
+    # Stage 2: AI exterior component inspection (Fail-Safe 2nd line)
     # -------------------------------------------------------------
-    print("\n[2단계] AI 온디바이스 외관 결함/잘림 전수 분석 중...")
+    print("\n[Stage 2] Running on-device AI exterior defect/crop analysis...")
     detector = OnnxYoloDetector(MODEL_PATH)
     detected_items, infer_ms = detector.detect(image_path)
 
     detected_classes = {item["class"] for item in detected_items}
 
-    print(f"    -> 순수 추론 시간: {infer_ms:.1f} ms")
-    print(f"    -> 검출된 부품 내역:")
+    print(f"    -> Pure inference time: {infer_ms:.1f} ms")
+    print(f"    -> Detected components:")
     for item in detected_items:
-        print(f"       * [{item['class']:<12}] 신뢰도: {item['confidence']*100:5.1f}% | 위치: {item['bbox']}")
+        print(f"       * [{item['class']:<12}] Confidence: {item['confidence']*100:5.1f}% | BBox: {item['bbox']}")
 
     # -------------------------------------------------------------
-    # 3단계: 엄격한 무결성 판정 (AND 조건)
+    # Stage 3: Strict integrity judgment (AND condition)
     # -------------------------------------------------------------
-    # 필수 3대 요소: CPU(processor)와 포트(ports_block)가 둘 다 제대로 보여야 함!
+    # Required core elements: both CPU (processor) and ports (ports_block) must be clearly visible!
     has_cpu = "processor" in detected_classes
     has_ports = "ports_block" in detected_classes
     has_gpio = "gpio_header" in detected_classes
 
     missing = []
     if not has_cpu:
-        missing.append("CPU 프로세서(누락/가림/화면밖 잘림)")
+        missing.append("CPU processor (missing/occluded/cropped)")
     if not has_ports:
-        missing.append("USB/이더넷 포트 블록")
+        missing.append("USB/Ethernet port block")
 
     print("\n" + "=" * 60)
-    print("📊 [최종 검사 판정 도출]")
+    print("📊 [Final Inspection Verdict]")
     print("=" * 60)
 
     if missing:
         verdict = "FAIL"
-        print(f"[*] 1차 판정 상태: {verdict} (외관 결함 의심)")
-        print(f"❌ [결함 사유] 필수 핵심 부품이 탐지되지 않았습니다: {missing}")
-        print("💡 [원인] 보드가 화면 밖으로 잘렸거나, 케이블/이물질로 가려졌거나, 파손되었습니다.")
+        print(f"[*] Primary verdict status: {verdict} (suspected exterior defect)")
+        print(f"❌ [Defect reason] Required core components not detected: {missing}")
+        print("💡 [Cause] Board is cropped out of frame, occluded by cable/object, or damaged.")
     else:
         verdict = "PASS"
-        print(f"[*] 1차 판정 상태: {verdict} (정상 통과)")
-        print("✅ [성공] 라즈베리파이 핵심 부품들이 온전하게 모두 확인되었습니다!")
+        print(f"[*] Primary verdict status: {verdict} (passed)")
+        print("✅ [Success] All core Raspberry Pi components verified intact!")
 
-    print(f"[*] 영상 선명도: {blur_score:.1f} 점 | AI 추론 속도: {infer_ms:.1f} ms")
+    print(f"[*] Image sharpness: {blur_score:.1f} | AI inference speed: {infer_ms:.1f} ms")
     print("=" * 60)
     return verdict
 

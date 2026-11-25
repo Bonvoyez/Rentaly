@@ -4,12 +4,12 @@ from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
-# DB는 UTC를 시간대 없이 저장하므로 응답에 UTC 표시를 붙임
+# DB stores UTC without timezone, so attach UTC tzinfo in responses
 UTCDateTime = Annotated[datetime, AfterValidator(lambda v: v if v.tzinfo else v.replace(tzinfo=timezone.utc))]
 
 
 # =============================================================================
-# Edge 검사 결과 수신용 스키마
+# Schemas for receiving Edge inspection results
 # =============================================================================
 class Defect(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -41,7 +41,7 @@ class InspectionMetadata(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def accept_edge_format(cls, data):
-        # 검사대(web_inspector.py) 전송 형식을 API_CONTRACT 형식으로 맞춤
+        # Normalize inspector (web_inspector.py) payload to API_CONTRACT format
         if not isinstance(data, dict):
             return data
         data = dict(data)
@@ -65,11 +65,11 @@ class InspectionMetadata(BaseModel):
 
 
 # =============================================================================
-# 관리자 인증(Auth) 스키마
+# Admin Auth schemas
 # =============================================================================
 class AdminLoginRequest(BaseModel):
-    account: str = Field(..., description="관리자 로그인 계정 ID", examples=["admin"])
-    password: str = Field(..., description="관리자 비밀번호", examples=["admin1234!"])
+    account: str = Field(..., description="Admin login account ID", examples=["admin"])
+    password: str = Field(..., description="Admin password", examples=["admin1234!"])
 
 
 class TokenResponse(BaseModel):
@@ -88,7 +88,7 @@ class AdminUserResponse(BaseModel):
 
 
 # =============================================================================
-# 관리자 대시보드(Admin Inspections) 스키마
+# Admin Dashboard (Admin Inspections) schemas
 # =============================================================================
 class AIResultResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -144,11 +144,11 @@ class InspectionDetailResponse(InspectionSummaryResponse):
 class ConfirmVerdictRequest(BaseModel):
     decision: str = Field(
         ...,
-        description="확정 판정 값 ('CONFIRMED_PASS' 또는 'CONFIRMED_REJECT')",
+        description="Final verdict value ('CONFIRMED_PASS' or 'CONFIRMED_REJECT')",
         examples=["CONFIRMED_PASS"]
     )
-    reason: Optional[str] = Field(None, description="승인/반려 판정 사유", examples=["외관 이상 없음 확인"])
+    reason: Optional[str] = Field(None, description="Reason for approval/rejection", examples=["Verified no physical defects"])
 
 
 class RetroactiveRejectRequest(BaseModel):
-    reason: str = Field(..., description="사후 반려 사유 (필수)", examples=["AI 미탐으로 인한 포트 파손 사후 발견"])
+    reason: str = Field(..., description="Reason for retroactive rejection (required)", examples=["Port damage discovered later due to AI miss"])

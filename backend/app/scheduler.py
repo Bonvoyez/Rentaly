@@ -11,6 +11,6 @@ def scheduled_job():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # 매일 새벽 03:00에 만료 이미지 정리 실행
+    # Run expired image cleanup daily at 03:00 AM
     scheduler.add_job(scheduled_job, "cron", hour=3, minute=0)
     scheduler.start()
