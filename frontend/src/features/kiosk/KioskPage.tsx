@@ -81,8 +81,8 @@ export function KioskPage() {
         if (message.captureImageUrl) setCaptureImageUrl(message.captureImageUrl);
         if (
           message.stage === "LED_CHECK" &&
-          /PWR|LED|전원/i.test(message.message) &&
-          /꺼|불량|실패|문제|켜지지/i.test(message.message)
+          /PWR|LED|power/i.test(message.message) &&
+          /off|fail|error|issue|unlit|not lit/i.test(message.message)
         )
           setFailureTarget("pwr-led");
         setTelemetry(message);
@@ -101,18 +101,18 @@ export function KioskPage() {
     setStartError("");
     if (!brokerUrl) { setView("ocr"); return; }
     if (!connected || !sessionRef.current) {
-      setStartError("연결을 확인한 뒤 다시 시도해 주세요.");
+      setStartError("Please check the connection and try again.");
       return;
     }
     setStarting(true);
     try {
       if (!await sessionRef.current.publishStart()) {
-        setStartError("검사를 시작하지 못했습니다. 다시 시도해 주세요.");
+        setStartError("Failed to start inspection. Please try again.");
         return;
       }
       setView(current => (current === "ready" || current === "reposition") ? "ocr" : current);
     } catch {
-      setStartError("검사를 시작하지 못했습니다. 다시 시도해 주세요.");
+      setStartError("Failed to start inspection. Please try again.");
     } finally {
       setStarting(false);
     }
@@ -137,18 +137,18 @@ export function KioskPage() {
         return (
           <>
             <Header connected={connected} connection={connection} />
-            <Title title="반납을 시작할까요?" subtitle="보드를 정가운데에 놓고 USB-C 전원을 연결해주세요." />
+            <Title title="Ready to return your device?" subtitle="Place the board in the center and connect USB-C power." />
             <div className="absolute left-6 top-44 text-[13px] leading-8 text-secondary dark:text-slate-400">
-              <p>• USB-C 전원을 연결해 주세요.</p>
-              <p>• 검사 중에는 보드를 움직이지 말아 주세요.</p>
+              <p>• Connect the USB-C power cable.</p>
+              <p>• Do not move the board during inspection.</p>
             </div>
             <div className="absolute left-[423px] top-[156px] w-[282px] text-center text-xs text-secondary dark:text-slate-400">
               <ReadyCameraPreview />
-              <span className="mt-2 block">보드를 정가운데에 놓아주세요.</span>
+              <span className="mt-2 block">Center the board inside the guide.</span>
             </div>
             {startError && <p role="alert" className="absolute bottom-[104px] left-6 text-xs text-danger">{startError}</p>}
             <Button size="kiosk" className="absolute bottom-10 left-6" disabled={starting} onClick={() => void startInspection()}>
-              검사 시작
+              Start Inspection
             </Button>
           </>
         );
@@ -168,24 +168,24 @@ export function KioskPage() {
         return (
           <>
             <Header connected={connected} connection={connection} />
-            <Title title="검사가 정상적으로 완료됐어요" subtitle="이상이 없어요. 이제 반납할 수 있어요." />
+            <Title title="Inspection passed" subtitle="No issues found. You can complete your return." />
             <ResultChecks mode="pass" />
-            {button("반납 완료")}
+            {button("Complete Return")}
           </>
         );
       case "complete":
         return (
           <div className="absolute inset-0 flex flex-col items-center pt-14 text-center">
-            <img src={completeImage} alt="기쁜 표정의 완료 캐릭터" className="size-[150px] object-contain" />
-            <h1 className="mt-6 text-3xl font-bold">반납이 완료됐어요!</h1>
-            <p className="mt-2 text-[15px] text-secondary dark:text-slate-400">검사 이력은 관리자에게 전달돼요.</p>
+            <img src={completeImage} alt="Happy completion character" className="size-[150px] object-contain" />
+            <h1 className="mt-6 text-3xl font-bold">Return complete!</h1>
+            <p className="mt-2 text-[15px] text-secondary dark:text-slate-400">Your inspection record has been sent to the admin.</p>
             <div className="mt-5 grid h-[58px] w-[420px] grid-cols-[106px_1fr] items-center rounded-[14px] border border-line-soft px-4 text-left text-xs dark:border-[#334155]">
-              <span className="text-secondary dark:text-slate-400">검사 ID</span>
+              <span className="text-secondary dark:text-slate-400">Inspection ID</span>
               <strong className="min-w-0 break-all">
                 {telemetry?.inspectionId ?? "7b2c4d91-a6e8-4fd0-b53a-2c4e6f8a1b90"}
               </strong>
             </div>
-            <small className="mt-3 text-xs text-muted">잠시 후 첫 화면으로 돌아갑니다.</small>
+            <small className="mt-3 text-xs text-muted">Returning to the start screen shortly.</small>
           </div>
         );
       case "reposition":
@@ -193,12 +193,12 @@ export function KioskPage() {
           <>
             <Header connected={connected} connection={connection} />
             <Title
-              title="보드를 다시 놓아주세요"
-              subtitle={telemetry?.message ?? "안내된 항목을 확인한 뒤 다시 검사해 주세요."}
+              title="Please reposition the board"
+              subtitle={telemetry?.message ?? "Check the guidance and try the inspection again."}
             />
             <ResultChecks mode="reposition" />
             <span className="absolute left-11 top-[365px] text-xs font-medium text-amber-700">
-              재시도 횟수&nbsp; {telemetry?.stage === "REPOSITION" ? telemetry.repositionCount : 1} / 3
+              Retry&nbsp; {telemetry?.stage === "REPOSITION" ? telemetry.repositionCount : 1} / 3
             </span>
             <Button
               size="kiosk"
@@ -210,7 +210,7 @@ export function KioskPage() {
                 void startInspection();
               }}
             >
-              다시 검사
+              Retry Inspection
             </Button>
           </>
         );
@@ -218,9 +218,9 @@ export function KioskPage() {
         return (
           <>
             <Header connected={connected} connection={connection} />
-            <Title title="보드에 문제가 의심돼요" subtitle="관리자가 검사 결과를 확인할 예정이에요." />
+            <Title title="Potential issue detected" subtitle="An administrator will review the inspection result." />
             <ResultChecks mode="fail" failureTarget={failureTarget} />
-            {button("처음 화면으로")}
+            {button("Back to Start")}
           </>
         );
       case "manual":
@@ -229,15 +229,15 @@ export function KioskPage() {
           <>
             <Header connected={connected} connection={connection} />
             <Title
-              title="관리자에게 직접 반납해 주세요"
-              subtitle="자동 검사를 완료하지 못했어요. 관리자에게 보드를 전달해 주세요."
+              title="Please return to an administrator"
+              subtitle="Automatic inspection could not be completed. Please hand the board to an administrator."
             />
             <img
               className="absolute left-[330px] top-[190px] size-36 object-contain"
               src={manualImage}
-              alt="걱정하는 표정의 안내 캐릭터"
+              alt="Concerned guide character"
             />
-            {button("처음 화면으로")}
+            {button("Back to Start")}
           </>
         );
       default:
@@ -258,14 +258,14 @@ export function KioskPage() {
 
 function Header({ connected, connection }: { readonly connected: boolean; readonly connection: TelemetryConnection }) {
   const label = !import.meta.env.VITE_MQTT_BROKER_URL
-    ? "데모 모드"
+    ? "Demo Mode"
     : connection === "connecting"
-      ? "연결 중"
+      ? "Connecting"
       : connected
-        ? "실시간 연결"
+        ? "Live"
         : connection === "error"
-          ? "연결 오류"
-          : "연결 끊김";
+          ? "Connection Error"
+          : "Disconnected";
   return <SystemStatus connected={connected} label={label} />;
 }
 function Title({ title, subtitle }: { readonly title: string; readonly subtitle: string }) {
@@ -279,19 +279,21 @@ function Title({ title, subtitle }: { readonly title: string; readonly subtitle:
 function ReadyCameraPreview() {
   return (
     <div className="relative h-[200px] w-[282px] overflow-hidden rounded-xl bg-slate-300">
-      <CameraImage fallbackImageUrl={boardImage} fallbackAlt="검사대 중앙에 놓인 Raspberry Pi 보드" className="object-cover" />
+      <CameraImage fallbackImageUrl={boardImage} fallbackAlt="Raspberry Pi board centered on inspection station" className="object-cover" />
       <span
         role="img"
-        aria-label="보드 배치 가이드"
+        aria-label="Board placement guide"
         className="pointer-events-none absolute inset-7 rounded-lg border-3 border-primary/70"
       />
     </div>
   );
 }
-const CANDIDATE_FEEDS = (import.meta.env.VITE_CAMERA_FEED_URL ?? "")
-  .split(",")
-  .map((url: string) => url.trim())
-  .filter(Boolean);
+function getCandidateFeeds(): string[] {
+  return (import.meta.env.VITE_CAMERA_FEED_URL ?? "")
+    .split(",")
+    .map((url: string) => url.trim())
+    .filter(Boolean);
+}
 
 function CameraImage({
   imageUrl,
@@ -307,21 +309,11 @@ function CameraImage({
   const [feedIndex, setFeedIndex] = useState(0);
   const [allFailed, setAllFailed] = useState(false);
 
-  // 캡처 이미지가 있으면 캡처 이미지 우선 사용
-  if (imageUrl) {
-    return (
-      <img
-        src={imageUrl}
-        alt={fallbackAlt}
-        className={`h-full w-full ${className}`}
-      />
-    );
-  }
-
-  const currentFeed = CANDIDATE_FEEDS[feedIndex];
+  const candidateFeeds = getCandidateFeeds();
+  const currentFeed = candidateFeeds[feedIndex];
 
   const handleError = () => {
-    if (feedIndex + 1 < CANDIDATE_FEEDS.length) {
+    if (feedIndex + 1 < candidateFeeds.length) {
       setFeedIndex((prev) => prev + 1);
     } else {
       setAllFailed(true);
@@ -329,6 +321,15 @@ function CameraImage({
   };
 
   if (allFailed || !currentFeed) {
+    if (imageUrl) {
+      return (
+        <img
+          src={imageUrl}
+          alt={fallbackAlt}
+          className={`h-full w-full ${className}`}
+        />
+      );
+    }
     return (
       <>
         <img
@@ -337,7 +338,7 @@ function CameraImage({
           className={`h-full w-full ${className}`}
         />
         <span className="absolute bottom-1 left-1 rounded bg-slate-900/75 px-1.5 py-0.5 text-[10px] text-white">
-          카메라 연결 안 됨
+          Camera disconnected
         </span>
       </>
     );
@@ -347,7 +348,7 @@ function CameraImage({
     <img
       key={currentFeed}
       src={currentFeed}
-      alt="실시간 카메라 프리뷰"
+      alt="Live camera preview"
       onError={handleError}
       className={`h-full w-full ${className}`}
     />
@@ -360,7 +361,7 @@ function ProgressCameraPreview({ captureImageUrl }: { readonly captureImageUrl: 
         <CameraImage
           imageUrl={captureImageUrl}
           fallbackImageUrl={boardImage}
-          fallbackAlt={captureImageUrl ? "검사대에서 촬영한 Raspberry Pi 보드" : "검사대 중앙에 놓인 Raspberry Pi 보드"}
+          fallbackAlt={captureImageUrl ? "Raspberry Pi board captured at station" : "Raspberry Pi board centered on inspection station"}
           className="object-contain"
         />
       </div>
@@ -382,20 +383,20 @@ function ProgressView({
 }) {
   const config = {
     ocr: {
-      accent: "고유번호",
-      fallback: "카메라로 고유번호를 인식 중입니다",
+      accent: "Serial ID",
+      fallback: "Recognizing the unique serial number via camera",
       progress: 20,
       rows: ["active", "muted", "muted"],
     },
     led: {
-      accent: "상태",
-      fallback: "고유번호를 확인했어요. 전원 표시등을 검사 중이에요.",
+      accent: "Power LED",
+      fallback: "Serial ID verified. Checking the power indicator LED.",
       progress: 58,
       rows: ["success", "active", "muted"],
     },
     ai: {
-      accent: "외관",
-      fallback: "이제 거의 끝나가요. 외관을 검사 중이에요.",
+      accent: "Exterior",
+      fallback: "Almost done. Inspecting the board exterior.",
       progress: 86,
       rows: ["success", "success", "active"],
     },
@@ -405,20 +406,20 @@ function ProgressView({
     <>
       <Header connected={connected} connection={connection} />
       <h1 className="absolute left-6 top-[72px] text-[28px] font-bold">
-        보드 <em className="not-italic text-primary">{current.accent}</em>를 확인하고 있어요
+        Checking board <em className="not-italic text-primary">{current.accent}</em>
       </h1>
       <p className="absolute left-6 top-[118px] text-sm text-secondary dark:text-slate-400">
         {telemetry?.message ?? current.fallback}
       </p>
       <ProgressCameraPreview captureImageUrl={captureImageUrl} />
       <div className="absolute left-[423px] top-[174px] grid w-80 gap-5">
-        {["고유번호 확인", "전원 표시등", "외관 검사"].map((label, index) => {
+        {["Serial Verification", "Power LED", "Exterior Inspection"].map((label, index) => {
           const tone = current.rows[index] ?? "muted";
           return (
             <InspectionCheck
               key={label}
               label={label}
-              state={tone === "success" ? "완료" : tone === "active" ? "진행 중" : "대기"}
+              state={tone === "success" ? "Done" : tone === "active" ? "In Progress" : "Pending"}
               tone={tone}
             />
           );
@@ -426,7 +427,7 @@ function ProgressView({
       </div>
       <ProgressBar
         value={telemetry?.progressPercent ?? current.progress}
-        label={telemetry ? `${telemetry.progressPercent}%` : import.meta.env.VITE_MQTT_BROKER_URL ? "대기" : "데모"}
+        label={telemetry ? `${telemetry.progressPercent}%` : import.meta.env.VITE_MQTT_BROKER_URL ? "Waiting" : "Demo"}
       />
     </>
   );
@@ -447,21 +448,21 @@ function ResultChecks({
     >
       <InspectionCheck
         compact={stacked}
-        label="PWR LED 점등"
-        state={mode === "pass" ? "정상" : pwrFailed ? "확인 필요" : mode === "fail" ? "이상 없음" : "해당 없음"}
+        label="PWR LED Status"
+        state={mode === "pass" ? "Normal" : pwrFailed ? "Needs Check" : mode === "fail" ? "Normal" : "N/A"}
         tone={mode === "pass" ? "success" : pwrFailed ? "warning" : "muted"}
       />
       <InspectionCheck
         compact={stacked}
-        label="외관 검사"
-        state={mode === "pass" ? "정상" : exteriorFailed ? "확인 필요" : mode === "fail" ? "이상 없음" : "해당 없음"}
+        label="Exterior Inspection"
+        state={mode === "pass" ? "Normal" : exteriorFailed ? "Needs Check" : mode === "fail" ? "Normal" : "N/A"}
         tone={mode === "pass" ? "success" : exteriorFailed ? "warning" : "muted"}
       />
       <InspectionCheck
         compact={stacked}
-        label="고유번호 인식"
+        label="Serial Recognition"
         state={
-          mode === "reposition" ? "확인 필요" : mode === "pass" ? "정상" : mode === "fail" ? "인식 완료" : "해당 없음"
+          mode === "reposition" ? "Needs Check" : mode === "pass" ? "Normal" : mode === "fail" ? "Recognized" : "N/A"
         }
         tone={mode === "reposition" ? "warning" : mode === "pass" ? "success" : "muted"}
       />
